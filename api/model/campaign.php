@@ -270,130 +270,160 @@ class CAMPAIGNMODEL extends APIRESPONSE
      * @return multitype:string
      */
     public function createCampaign($data, $loginData)
-    {
-        // Initialize result array
-        $resultArray = array();
-        try {
-            $db = $this->dbConnect();
+{
+    $resultArray = array();
+    try {
+        $db = $this->dbConnect();
 
-            // Validate input details
-            $validationData = array(
-                "templateId"    => $data['templateId'],
-                "groupId"       => $data['group']['groupId'],
-                "campaignTitle" => $data['title'],
-            );
-            $this->validateInputDetails($validationData);
+        // Validate input details
+        $validationData = array(
+            "templateId"    => $data['templateId'],
+            "groupId"       => $data['group']['groupId'],
+            "campaignTitle" => $data['title'],
+        );
+        $this->validateInputDetails($validationData);
 
-            // Check if the template ID exists
-            $sql = "SELECT id FROM cmp_whatsapp_templates WHERE template_id = '" . $data['templateId'] . "' AND status = 1";
-            $result = mysqli_query($db, $sql);
-            if ($result) {
-                $row = mysqli_fetch_assoc($result);
-                if ($row) {
-                    $template_id = $row['id'];
-                } else {
-                    throw new Exception("Template ID not found");
-                }
-            } else {
-                throw new Exception("Database query failed: " . mysqli_error($db));
-            }
+        // Fetch Template ID
+        $templateId = mysqli_real_escape_string($db, $data['templateId']);
+        $sql = "SELECT id FROM cmp_whatsapp_templates WHERE template_id = '$templateId' AND status = 1";
+        $result = mysqli_query($db, $sql);
 
-            // Extract group ID and group name
-            $groupId = $data['group']['groupId'];
-            $groupName = $data['group']['groupName'];
+        if (!$result || mysqli_num_rows($result) == 0) {
+            throw new Exception("Template ID not found");
+        }
+        $row = mysqli_fetch_assoc($result);
+        $template_id = $row['id'];
 
-            // Validate Group ID and Group Name
-            $checkIdQuery = "SELECT COUNT(*) as count FROM cmp_group_contact WHERE id = '$groupId' AND group_name='$groupName' AND status = 1";
-            $result = $db->query($checkIdQuery);
+        // Fetch Group Details
+        $groupId =  $data['group']['groupId'];
+        $groupName =  $data['group']['groupName'];
+
+        $sql = "SELECT COUNT(*) as count FROM cmp_group_contact WHERE id = '$groupId' AND group_name = '$groupName' AND status = 1";
+        $result = mysqli_query($db, $sql);
+        $row = mysqli_fetch_assoc($result);
+
+        if ($row['count'] == 0) {
+            $db->close();
+            return [
+                "apiStatus" => [
+                    "code"    => "400",
+                    "message" => "Group does not exist",
+                ],
+            ];
+        }
+
+        // Fetch Timezone details
+        $timezone_zoneName = mysqli_real_escape_string($db, $data['timezone']['zoneName']);
+        $timezone_id = mysqli_real_escape_string($db, $data['timezone']['id']);
+    // Check if timezone exists in cmp_mst_timezone
+            $checkTimezoneQuery = "SELECT COUNT(*)
+            as count FROM cmp_mst_timezone WHERE id = '$timezone_id' AND zone_name = '$timezone_zoneName'";
+            $result = $db->query($checkTimezoneQuery);
             $row = $result->fetch_assoc();
 
             if ($row['count'] == 0) {
-                $db->close();
-                return [
-                    "apiStatus" => [
-                        "code"    => "400",
-                        "message" => "Group does not exist",
-                    ],
-                ];
+                throw new Exception("Invalid timezone ID or zone name.");
             }
 
-            // Extract timezone details
-            $timezone_id = $data['timezone']['id'];
-            $timezone_zoneName = $data['timezone']['zoneName'];
+       // Validate Variables
+foreach ($data['variableIds'] as $variable) {
+    // Validate Header Variables
+    if ($variable['type'] === 'header') {
+        foreach ($variable['variables'] as $var) {
+            $varValueId = mysqli_real_escape_string($db, $var['varValue']['varTypeId']);
+            $varValueName = mysqli_real_escape_string($db, $var['varValue']['varTypeName']);
 
-            // Validate all variables before inserting anything
-            foreach ($data['variableIds'] as $variable) {
-                $varTypeId = $variable['varName'];
-                $varValueid = $variable['varValue']['varTypeId'];
-                $varValuename = $variable['varValue']['varTypeName'];
-
-                // Validate variable ID and variable name in cmp_mst_variable
-                $checkVariableQuery = "SELECT COUNT(*) as count FROM cmp_mst_variable WHERE id = '$varValueid' AND variable_name = '$varValuename'";
-                $result = $db->query($checkVariableQuery);
-                $row = $result->fetch_assoc();
-
-                if ($row['count'] == 0) {
-                    throw new Exception("Invalid variable ID or variable name.");
-                }
+            $sql = "SELECT COUNT(*) as count FROM cmp_mst_variable WHERE id = '$varValueId' AND variable_name = '$varValueName'";
+            $result = mysqli_query($db, $sql);
+            if (!$result || mysqli_fetch_assoc($result)['count'] == 0) {
+                throw new Exception("Invalid header variable ID or variable name.");
             }
+        }
+    }
 
-            // Handle schedule time
-            if (!empty($data['scheduleStatus']) && $data['scheduleStatus'] == true) {
-                if (!empty($data['scheduledAt']) && !empty($timezone_zoneName)) {
-                    $scheduleAt = $data['scheduledAt'];
-                } else {
-                    throw new Exception("Invalid scheduled time or timezone.");
-                }
-            } else {
-                $scheduleAt = date("Y-m-d H:i:s", strtotime("+4 hours 30 minutes")); // Use current datetime
+    // Validate Body Variables
+    if ($variable['type'] === 'body') {
+        foreach ($variable['variables'] as $var) {
+            $varValueId = mysqli_real_escape_string($db, $var['varValue']['varTypeId']);
+            $varValueName = mysqli_real_escape_string($db, $var['varValue']['varTypeName']);
+
+            $sql = "SELECT COUNT(*) as count FROM cmp_mst_variable WHERE id = '$varValueId' AND variable_name = '$varValueName'";
+            $result = mysqli_query($db, $sql);
+            if (!$result || mysqli_fetch_assoc($result)['count'] == 0) {
+                throw new Exception("Invalid body variable ID or variable name.");
             }
+        }
+    }
+}
 
-            // Insert into cmp_campaign
-            $insertGroupQuery = "INSERT INTO cmp_campaign (group_id, template_id, title, restrictLangCode, timezone, schedule_at, send_num, created_by)
-    VALUES ('$groupId', '$template_id', '" . $data['title'] . "', '" . $data['restrictLangCode'] . "', '$timezone_zoneName', '$scheduleAt', '" . $data['SendNum'] . "', '" . $loginData['user_id'] . "')";
 
-            if ($db->query($insertGroupQuery) === true) {
-                // Get the last inserted campaign_id
-                $campaign_id = mysqli_insert_id($db);
+        // Schedule Time
+        $scheduleAt = !empty($data['scheduleStatus']) && $data['scheduleStatus'] === true
+            ? mysqli_real_escape_string($db, $data['scheduledAt'])
+            : date("Y-m-d H:i:s", strtotime("+4 hours 30 minutes"));
 
-                $call=New WHATSAPPTEMPLATEMODEL();
-                $call->sendMessage($data, $loginData,$campaign_id);
-                // Insert into cmp_campaign_variable_mapping
-                foreach ($data['variableIds'] as $variable) {
-                    $varTypeId = $variable['varName'];
-                    $varValueid = $variable['varValue']['varTypeId'];
-                    $varValuename = $variable['varValue']['varTypeName'];
+        // Insert Campaign
+        $title = mysqli_real_escape_string($db, $data['title']);
+        $restrictLangCode = mysqli_real_escape_string($db, $data['restrictLangCode']);
+        $sendNum = mysqli_real_escape_string($db, $data['SendNum']);
+        $createdBy = mysqli_real_escape_string($db, $loginData['user_id']);
 
-                    $insertVariableMappingQuery = "INSERT INTO cmp_campaign_variable_mapping (campaign_id, template_id, variable_type_id, variable_value, group_id, created_by) 
-VALUES ('$campaign_id', '$template_id', '$varTypeId', '$varValueid', '$groupId', '" . $loginData['user_id'] . "')";
+        $sql = "INSERT INTO cmp_campaign (group_id, template_id, title, restrictLangCode, timezone, schedule_at, send_num, created_by) 
+        VALUES ('$groupId', '$template_id', '$title', '$restrictLangCode', '$timezone_zoneName', '$scheduleAt', '$sendNum', '$createdBy')";
 
-                    if (!$db->query($insertVariableMappingQuery)) {
-                        throw new Exception("Error inserting campaign variable mapping: " . $db->error);
+        if (!mysqli_query($db, $sql)) {
+            throw new Exception("Error inserting campaign: " . mysqli_error($db));
+        }
+        $campaign_id = mysqli_insert_id($db);
+
+        // Send WhatsApp Message
+        $call = new WHATSAPPTEMPLATEMODEL();
+        $call->sendMessage($data, $loginData, $campaign_id);
+
+        foreach ($data['variableIds'] as $variable) {
+            if (isset($variable['type'])) {
+                $type = mysqli_real_escape_string($db, $variable['type']); // Prevent SQL injection
+        
+                foreach ($variable['variables'] as $var) {
+                    $vartypeId = mysqli_real_escape_string($db, $var['varName']);
+                    $varValueId = mysqli_real_escape_string($db, $var['varValue']['varTypeId']);
+                    $varValueName = mysqli_real_escape_string($db, $var['varValue']['varTypeName']);
+        
+                    $sqlW = "INSERT INTO cmp_campaign_variable_mapping (campaign_id, template_id, type, variable_type_id, variable_value, group_id, created_by) 
+                             VALUES ('$campaign_id', '$template_id', '$type', '$vartypeId', '$varValueId', '$groupId', '$createdBy')";
+        
+                    if (!mysqli_query($db, $sqlW)) {
+                        die("Error inserting variable mapping: " . mysqli_error($db));
                     }
                 }
-                $db->close();
-                $resultArray = array(
-                    "apiStatus" => array(
-                        "code"    => "200",
-                        "message" => "Campaign successfully created.",
-                    ),
-                );
-            } else {
-                throw new Exception("Error occurred while inserting campaign: " . $db->error);
             }
-        } catch (Exception $e) {
-            if (isset($db)) {
-                $db->close();
-            }
-            $resultArray = array(
-                "apiStatus" => array(
-                    "code"    => "401",
-                    "message" => $e->getMessage(),
-                ),
-            );
         }
-        return $resultArray;
+        
+        
+        // print_r($sqlW);exit;
+
+        $db->close();
+        return [
+            "apiStatus" => [
+                "code"    => "200",
+                "message" => "Campaign successfully created.",
+            ],
+        ];
+    } catch (Exception $e) {
+        if (isset($db)) {
+            $db->close();
+        }
+        return [
+            "apiStatus" => [
+                "code"    => "401",
+                "message" => $e->getMessage(),
+            ],
+        ];
     }
+}
+
+    
+
 
 
 

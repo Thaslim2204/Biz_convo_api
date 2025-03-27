@@ -242,7 +242,7 @@ class GROUPMODEL extends APIRESPONSE
         ORDER BY gc.id DESC 
    
         ";
-        print_r($queryService);exit;
+        // print_r($queryService);exit;
             //      LIMIT $start_index, $end_index
 
             $result = $db->query($queryService);

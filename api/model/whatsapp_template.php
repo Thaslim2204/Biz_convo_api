@@ -32,7 +32,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                     $result = $this->templateList($data, $loginData);
                     return $result;
                 } else if ($urlParam[1] == "sendMessage") {
-                    $result = $this->sendMessage($data, $loginData,"");
+                    $result = $this->sendMessage($data, $loginData);
                 } else if ($urlParam[1] == "uploadMedia") {
                     $result = $this->uploadMedia($data, $loginData);
                 } elseif ($urlParam[1] === 'testing') {
@@ -699,6 +699,43 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
         }
     }
 
+    public function uploadMediaGetID($loginData)
+    {
+        try {
+            $this->fbCredentials($loginData);
+
+            $uploadUrl = $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->phone_no_id . '/media';
+               
+            $curl = curl_init();
+
+            curl_setopt_array($curl, array(
+                CURLOPT_URL => 'https://graph.facebook.com/v22.0/637421792778479/media',
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_ENCODING => '',
+                CURLOPT_MAXREDIRS => 10,
+                CURLOPT_TIMEOUT => 0,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                CURLOPT_CUSTOMREQUEST => 'POST',
+                CURLOPT_POSTFIELDS => array('messaging_product' => 'whatsapp', 'file' => new CURLFILE('/C:/Users/Hermon/Pictures/Actors/actor.png')),
+                CURLOPT_HTTPHEADER => array(
+                    'file_offset: 0',
+                    'Authorization: ••••••'
+                ),
+            ));
+
+            $response = curl_exec($curl);
+
+            curl_close($curl);
+        } catch (Exception $e) {
+            return array(
+                "apiStatus" => array(
+                    "code" => "401",
+                    "message" => $e->getMessage(),
+                ),
+            );
+        }
+    }
 
     private function getUsingCampCredentials($data, $loginData)
     {
@@ -765,324 +802,404 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
         }
     }
 
-    public function sendMessage($data, $loginData,$campaign_id)
-{
-    try {
-        $db = $this->dbConnect();
-        // Fetch contacts and template dynamically
-        $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
+    public function sendMessage($data, $loginData, $campaign_id)
+    {
+        try {
+            // print_r($data);exit;
+            $db = $this->dbConnect();
+            // Fetch contacts and template dynamically
+            $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
 
-        // Check if the API response was successful
-        if ($fetchResponse['apiStatus']['code'] != "200") {
-            return $fetchResponse; // If there's an error in fetching contacts/template, return the error response.
-        }
+            // Check if the API response was successful
+            if ($fetchResponse['apiStatus']['code'] != "200") {
+                return $fetchResponse; // If there's an error in fetching contacts/template, return the error response.
+            }
 
-        // Get contacts and template from the response
-        $contacts = $fetchResponse['result']['contacts'];  // List of contacts
-        $template = $fetchResponse['result']['template'];  // Template data
+            // Get contacts and template from the response
+            $contacts = $fetchResponse['result']['contacts'];  // List of contacts
+            $template = $fetchResponse['result']['template'];  // Template data
 
-        // print_r(json_encode($contacts));exit;
-        // Initialize arrays to store success and failure recipients
-        $successRecipient = [];
-        $failureRecipient = [];
-        $responseArray = []; // To store the response from each individual request
+            // print_r(json_encode($contacts));exit;
+            // Initialize arrays to store success and failure recipients
+            $successRecipient = [];
+            $failureRecipient = [];
+            $responseArray = []; // To store the response from each individual request
 
-        // Loop through each contact and send the WhatsApp message
-        foreach ($contacts as $contact) {
-            // Prepare dynamic components based on the template and the contact data
-            $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact);
-            // print_r(json_encode($dynamicComponents));
-            // Build the message body
-            $body = [
-                'messaging_product' => 'whatsapp',
-                'recipient_type' => 'individual',
-                'to' => $contact['mobile'],  // The mobile number of the contact
-                'type' => 'template',
-                'template' => [
-                    'name' => $template['name'],  // Template name
-                    'language' => [
-                        'code' => $template['language'],  // Use the contact's language code
+            // Loop through each contact and send the WhatsApp message
+            foreach ($contacts as $contact) {
+                // Prepare dynamic components based on the template and the contact data
+                // print_r(json_encode($data['variableIds']));
+                $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds']);
+                print_r(json_encode($dynamicComponents, true));
+                // Build the message body
+                $body = [
+                    'messaging_product' => 'whatsapp',
+                    'recipient_type' => 'individual',
+                    'to' => $contact['mobile'],  // The mobile number of the contact
+                    'type' => 'template',
+                    'template' => [
+                        'name' => $template['name'],  // Template name
+                        'language' => [
+                            'code' => $template['language'],  // Use the contact's language code
+                        ],
+                        'components' => $dynamicComponents,  // Template components with dynamic data
                     ],
-                    'components' => $dynamicComponents,  // Template components with dynamic data
+                ];
+                $insertcampaign="Insert into cmp_campaign_contact(campaign_id,contact_id,created_by,created_date) values('".$campaign_id."','".$contact['contactId']."','".$loginData['user_id']."',now())";
+                $db->query($insertcampaign);
+                // Initialize cURL request to send the message
+                $curl = curl_init();
+                $url = $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->phone_no_id . '/' . "messages";
+
+                curl_setopt_array($curl, [
+                    CURLOPT_URL => $url,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_ENCODING => '',
+                    CURLOPT_MAXREDIRS => 10,
+                    CURLOPT_TIMEOUT => 0,
+                    CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                    CURLOPT_CUSTOMREQUEST => 'POST',
+                    CURLOPT_POSTFIELDS => json_encode($body),
+                    CURLOPT_HTTPHEADER => [
+                        'Content-Type: application/json',
+                        'Authorization: Bearer ' . $this->fb_auth_token,
+                    ],
+                ]);
+
+                $response = curl_exec($curl);
+                $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+                curl_close($curl);
+
+                // Add the response for this contact
+                $responseArray[] = json_decode($response, true); // Storing each response as an associative array
+
+                // Check if the request was successful
+                if ($httpCode == 200) {
+                    $successRecipient[] = $contact['mobile'];
+                } else {
+                    $failureRecipient[] = $contact['mobile'];
+                }
+            }
+
+            // Prepare response data for success and failure
+            $responses = [
+                "apiStatus" => [
+                    "code" => "200",
+                    "message" => "WhatsApp template message sent successfully",
+                ],
+                "result" => [
+                    "successRecipients" => $successRecipient,
+                    "failureRecipients" => $failureRecipient,
+                    "apiResponse" => $responseArray, // Return array of responses for all contacts
                 ],
             ];
-$insertcampaign="Insert into cmp_campaign_contact(campaign_id,contact_id,created_by,created_date) values('".$campaign_id."','".$contact['contactId']."','".$loginData['user_id']."',now())";
-            $db->query($insertcampaign);
-            // print_r($insertcampaign);exit;
 
-            // Initialize cURL request to send the message
-            $curl = curl_init();
-            $url = $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->phone_no_id . '/' . "messages";
-
-            curl_setopt_array($curl, [
-                CURLOPT_URL => $url,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => 'POST',
-                CURLOPT_POSTFIELDS => json_encode($body),
-                CURLOPT_HTTPHEADER => [
-                    'Content-Type: application/json',
-                    'Authorization: Bearer ' . $this->fb_auth_token,
+            return $responses;
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "401",
+                    "message" => $e->getMessage(),
                 ],
-            ]);
+            ];
+        }
+    }
 
-            $response = curl_exec($curl);
-            $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-            curl_close($curl);
+    /**
+     * Prepare dynamic components based on the template and contact data
+     */
+    private function prepareDynamicComponents($templateComponents, $contact, $variableIds)
+    {
+        // print_r(($variableIds));
+        // exit;
 
-            // Add the response for this contact
-            $responseArray[] = json_decode($response, true); // Storing each response as an associative array
+        // print_r($variableIds['body']);exit;
+        $dynamicComponents = [];
+        $headerHasVariable = false;
 
-            // Check if the request was successful
-            if ($httpCode == 200) {
-                $successRecipient[] = $contact['mobile'];
-            } else {
-                $failureRecipient[] = $contact['mobile'];
+        // Loop through each component to adjust dynamically based on the type and contact data
+        foreach ($templateComponents as $component) {
+            // Debugging: Check the component structure
+            // print_r(json_encode($component));  // This will print the current component before processing
+
+            switch ($component['type']) {
+                case 'HEADER':
+                    // If header contains text (replace placeholders like {{1}}, {{2}} etc.)
+                    if (isset($component['format']) == 'text' && isset($component['example']['header_text'])) {
+                        // Replace placeholders in header text dynamically
+                        // print_r(json_encode($variableIds));
+                        $headerHasVariable = true;
+                        $dynamicComponents[] = $this->prepareHeaderTextComponent($component, $contact, $variableIds);
+                    } else if (isset($component['format']) != 'text') {
+                        $dynamicComponents[] = $this->prepareHeaderMediaComponent($component, $contact);
+                    }
+                    break;
+
+                case 'BODY':
+
+                    // print_r(json_encode($component));exit;
+                    // Only add the body component if there is dynamic text to replace
+                    if (isset($component['text']) && isset($component['example']['body_text'])) {
+                        $dynamicComponents[] = $this->prepareBodyComponent($component, $contact, $variableIds, $headerHasVariable);
+                    }
+                    break;
+
+                case 'FOOTER':
+                    // Process the footer text if it exists
+                    if (isset($component['text']) && !empty($component['text'])) {
+                        $dynamicComponents[] = $this->prepareFooterComponent($component, $contact);
+                    }
+                    break;
+
+                    // case 'BUTTONS':
+                    //     // Process buttons if they exist
+                    //     if (isset($component['buttons']) && count($component['buttons']) > 0) {
+                    //         $dynamicComponents[] = $this->prepareButtonComponent($component, $contact);
+                    //     }
+                    //     break;
+
+                    // Add cases for any other custom component types here if needed
             }
         }
 
-        // Prepare response data for success and failure
-        $responses = [
-            "apiStatus" => [
-                "code" => "200",
-                "message" => "WhatsApp template message sent successfully",
-            ],
-            "result" => [
-                "successRecipients" => $successRecipient,
-                "failureRecipients" => $failureRecipient,
-                "apiResponse" => $responseArray, // Return array of responses for all contacts
-            ],
-        ];
-
-        return $responses;
-    } catch (Exception $e) {
-        return [
-            "apiStatus" => [
-                "code" => "401",
-                "message" => $e->getMessage(),
-            ],
-        ];
+        // Debugging: Print final dynamic components before returning
+        // print_r(json_encode($dynamicComponents));  // This will print the components array after processing
+        return $dynamicComponents;
     }
-}
 
-/**
- * Prepare dynamic components based on the template and contact data
- */
-private function prepareDynamicComponents($templateComponents, $contact)
-{
-    $dynamicComponents = [];
-    
-    // Loop through each component to adjust dynamically based on the type and contact data
-    foreach ($templateComponents as $component) {
-        // Debugging: Check the component structure
-        // print_r(json_encode($component));  // This will print the current component before processing
 
-        switch ($component['type']) {
-            case 'HEADER':
-                // If header contains text (replace placeholders like {{1}}, {{2}} etc.)
-                if (isset($component['text']) && isset($component['example'])) {
-                    // Replace placeholders in header text dynamically
-                    $dynamicComponents[] = $this->prepareHeaderTextComponent($component, $contact);
-                }else if (isset($component['format']) != 'text') {
-                    $dynamicComponents[] = $this->prepareHeaderMediaComponent($component, $contact);
-                }
-                break;
+    private function prepareHeaderTextComponent($component, $contact, $variableIds)
+    {
+        // exit;
+        // print_r($variableIds);
+        // exit;
+        $dynamicParameters = [];
+        preg_match_all('/\{\{(\d+)\}\}/', $component['text'], $matches); // Find placeholders
 
-            case 'BODY':
-                // Only add the body component if there is dynamic text to replace
-                if (isset($component['text']) && !empty($component['text'])) {
-                    $dynamicComponents[] = $this->prepareBodyComponent($component, $contact);
-                }
-                break;
+        // Check if header has a variable (header can only have 1 variable)
+        if (count($matches[1]) == 1) {
+            $varName = (int) $matches[1][0];  // Get the placeholder number
 
-            case 'FOOTER':
-                // Process the footer text if it exists
-                if (isset($component['text']) && !empty($component['text'])) {
-                    $dynamicComponents[] = $this->prepareFooterComponent($component, $contact);
-                }
-                break;
+            // Find the corresponding variable in the header
+            $variable = $this->findVariableByName($varName, $variableIds, true);  // Pass 'true' for header
 
-            // case 'BUTTONS':
-            //     // Process buttons if they exist
-            //     if (isset($component['buttons']) && count($component['buttons']) > 0) {
-            //         $dynamicComponents[] = $this->prepareButtonComponent($component, $contact);
-            //     }
-            //     break;
+            if ($variable) {
+                $dynamicValue = $this->getDynamicValueForVariable($variable, $contact);
 
-            // Add cases for any other custom component types here if needed
+                // Add the dynamic value to the parameters
+                $dynamicParameters[] = [
+                    'type' => 'text',
+                    'text' => $dynamicValue  // Replace {{1}} with the dynamic value
+                ];
+            }
         }
-    }
 
-    // Debugging: Print final dynamic components before returning
-    // print_r(json_encode($dynamicComponents));  // This will print the components array after processing
-    return $dynamicComponents;
-}
-
-
-/**
- * Prepare the HEADER component with dynamic media (image/video/document, etc.)
- */
-private function prepareHeaderTextComponent($component, $contact)
-{
-    // Replace placeholders (e.g., {{1}}) with dynamic values
-    $text = $this->replacePlaceholders($component['text'], $contact);
-
-    return [
-        'type' => 'HEADER',
-        'parameters' => [
-            [
-                'type' => 'text',
-                'text' => $text,  // Updated text with placeholders replaced
-            ]
-        ]
-    ];
-}
-
-private function prepareHeaderMediaComponent($component, $contact)
-{
-    // Assuming the header media is an image (you can extend this for other media types like video)
-    if (isset($component['format'])) {
         return [
             'type' => 'HEADER',
-            'parameters' => [
-                [
-                    'type' => $component['format'],
-                    strtolower($component['format']) => [
-                        // 'link' => $component['example']['header_handle'][0]
-                        "id" => "8936761253094436"
-                    ]
-                ]
-            ]
+            'parameters' => $dynamicParameters
         ];
     }
 
-    // You can extend this for other media types like videos
-    if (isset($component['parameters'][0]['video']['id'])) {
-        return [
-            'type' => 'HEADER',
-            'parameters' => [
-                [
-                    'type' => 'video',
-                    'video' => [
-                        'id' => $component['parameters'][0]['video']['id']
+
+    private function prepareHeaderMediaComponent($component, $contact)
+    {
+        // Assuming the header media is an image (you can extend this for other media types like video)
+        if (isset($component['format'])) {
+            return [
+                'type' => 'HEADER',
+                'parameters' => [
+                    [
+                        'type' => $component['format'],
+                        strtolower($component['format']) => [
+                            // 'link' => $component['example']['header_handle'][0]
+                            "id" => "8936761253094436"
+                        ]
                     ]
                 ]
-            ]
-        ];
-    }
-
-    return []; // Return an empty array if no valid media is found
-}
-
-
-/**
- * Prepare the HEADER component with dynamic text (variables like {first_name}, etc.)
- */
-private function prepareBodyComponent($component, $contact)
-{
-    // Fetch the example body text
-    $exampleText = $component['example']['body_text'][0];  // Assuming example_text is a list of arrays
-    // print_r($contact);exit;
-
-    // Replace placeholders in the text
-    $dynamicParameters = [];
-    
-    // Loop through each placeholder and match with the example array values
-    preg_match_all('/\{\{(\d+)\}\}/', $component['text'], $matches); // Find all placeholders like {{1}}, {{2}}, etc.
-
-    foreach ($matches[1] as $index) {
-        // We match the placeholder {{1}} with the value from example body text
-        if (isset($exampleText[$index - 1])) {
-            $dynamicParameters[] = [
-                'type' => 'text',
-                'text' => $exampleText[$index - 1] // Replace {{1}} with "the end of August", {{2}} with "25OFF", etc.
             ];
         }
+
+        // You can extend this for other media types like videos
+        // if (isset($component['parameters'][0]['video']['id'])) {
+        //     return [
+        //         'type' => 'HEADER',
+        //         'parameters' => [
+        //             [
+        //                 'type' => 'video',
+        //                 'video' => [
+        //                     'id' => $component['parameters'][0]['video']['id']
+        //                 ]
+        //             ]
+        //         ]
+        //     ];
+        // }
+
+        return []; // Return an empty array if no valid media is found
     }
 
-    // print_r($dynamicParameters);exit;
-    // Now, replace the original text with the dynamic components (if needed for full text replacement)
-    $text = $this->replacePlaceholders($component['text'], $contact);
-// print_r($text);exit;
-    // Finally, return the body component with dynamic parameters
-    return [
-        'type' => 'BODY',
-        'parameters' => $dynamicParameters  // Updated dynamic parameters based on the body_text
-    ];
-}
 
+    private function prepareBodyComponent($component, $contact, $variableIds, $headerHasVariable)
+    {
+        $dynamicParameters = [];
+        preg_match_all('/\{\{(\d+)\}\}/', $component['text'], $matches); // Find placeholders like {{1}}, {{2}}, etc.
 
-/**
- * Prepare the BODY component with dynamic content (e.g., variables like {first_name}, etc.)
- */
-private function prepareFooterComponent($component, $contact)
-{
-    $text = $this->replacePlaceholders($component['text'], $contact);  // Replace placeholders if needed
+        // Loop through all placeholders found in the body text
+        foreach ($matches[1] as $index) {
+            // Determine the variable name (this is the number from the placeholder, like 1, 2, etc.)
+            $varName = (int) $index;
 
-    return [
-        'type' => 'FOOTER',
-        'parameters' => [
-            [
-                'type' => 'text',
-                'text' => $text,
-            ]
-        ]
-    ];
-}
+            // Find the corresponding variable in the body (multiple variables possible)
+            $variable = $this->findVariableByName($varName, $variableIds, false);  // Pass 'false' for body
 
-/**
- * Prepare BUTTONS component with dynamic content
- */
-private function prepareButtonComponent($component, $contact)
-{
-    $buttons = [];
+            if ($variable) {
+                $dynamicValue = $this->getDynamicValueForVariable($variable, $contact);
 
-    // Loop through the buttons and replace placeholders if necessary
-    foreach ($component['buttons'] as $button) {
-        if (isset($button['text'])) {
-            // Replace placeholders in button text
-            $button['text'] = $this->replacePlaceholders($button['text'], $contact);
+                // Add the dynamic value to the parameters
+                $dynamicParameters[] = [
+                    'type' => 'text',
+                    'text' => $dynamicValue  // Replace {{1}} with the dynamic value
+                ];
+            }
         }
 
-        // Add the button to the buttons array
-        $buttons[] = [
-            'type' => $button['type'],
-            'text' => $button['text']
+        return [
+            'type' => 'BODY',
+            'parameters' => $dynamicParameters
         ];
     }
 
-    return [
-        'type' => 'BUTTON',
-        'parameters' => $buttons
-    ];
-}
 
 
-/**
- * Replace placeholders in the template text with actual contact information
- */
-private function replacePlaceholders($text, $contact)
-{
-    // Replace placeholders (e.g., {{1}}, {{2}}, etc.) with dynamic values from the contact
-    $placeholders = [
-        '{{1}}' => isset($contact['firstName']) ? $contact['firstName'] : '',  // Replace {{1}} with first name
-        '{{2}}' => isset($contact['lastName']) ? $contact['lastName'] : '',   // Replace {{2}} with last name
-        '{{3}}' => isset($contact['mobile']) ? $contact['mobile'] : '',       // Replace {{3}} with mobile number
-        '{{4}}' => isset($contact['email']) ? $contact['email'] : '',         // Replace {{4}} with email
-        // Add more placeholders as needed
-    ];
 
-    // Loop through all placeholders and replace them in the text
-    foreach ($placeholders as $placeholder => $replacement) {
-        $text = str_replace($placeholder, $replacement, $text);
+    /**
+     * Find the variable from variableIds by its varName (like {{1}}, {{2}}, etc.)
+     */
+    private function findVariableByName($varName, $variableIds, $isHeader = false)
+    {
+        // Loop through the variableIds array
+        // print_r(json_encode($variableIds));exit;
+        foreach ($variableIds as $group) {
+            // print_r(json_encode($group));exit;
+            // Check if the group type is 'header' or 'body'
+            if ($isHeader && $group['type'] == 'header') {
+                // Find the variable in the header group
+                foreach ($group['variables'] as $variable) {
+                    if ($variable['varName'] == (string)$varName) {
+                        return $variable;  // Return the variable from the header
+                    }
+                }
+            } elseif (!$isHeader && $group['type'] == 'body') {
+                // Find the variable in the body group
+                foreach ($group['variables'] as $variable) {
+                    if ($variable['varName'] == (string)$varName) {
+                        return $variable;  // Return the variable from the body
+                    }
+                }
+            }
+        }
+
+        return null;  // Return null if no variable found
     }
 
-    return $text;
-}
+
+
+
+    /**
+     * Get the dynamic value for a variable from the contact data
+     */
+    private function getDynamicValueForVariable($variable, $contact)
+    {
+        // print_r(json_encode($contact['lastName']));exit;
+        // Fetch the dynamic value based on the variable type
+        switch ($variable['varValue']['varTypeName']) {
+            case 'Contact Full Name':
+                return $contact['firstName'] . ' ' . $contact['lastName'];  
+            case 'Contact Last Name':
+                return $contact['lastName'];  
+            case 'Contact First Name':
+                return $contact['firstName']; 
+            case 'Contact Email':
+                return $contact['email'];  
+            case 'Contact Phone':
+                return $contact['mobile']; 
+            case 'Contact Country':
+                return $contact['country'];  
+            case 'Contact Language':
+                return $contact['language_code'];  
+            default:
+                return '';  
+        }
+    }
+
+
+    /**
+     * Prepare the BODY component with dynamic content (e.g., variables like {first_name}, etc.)
+     */
+    private function prepareFooterComponent($component, $contact)
+    {
+        $text = $this->replacePlaceholders($component['text'], $contact);  // Replace placeholders if needed
+
+        return [
+            'type' => 'FOOTER',
+            'parameters' => [
+                [
+                    'type' => 'text',
+                    'text' => $text,
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Prepare BUTTONS component with dynamic content
+     */
+    private function prepareButtonComponent($component, $contact)
+    {
+        $buttons = [];
+
+        // Loop through the buttons and replace placeholders if necessary
+        foreach ($component['buttons'] as $button) {
+            if (isset($button['text'])) {
+                // Replace placeholders in button text
+                $button['text'] = $this->replacePlaceholders($button['text'], $contact);
+            }
+
+            // Add the button to the buttons array
+            $buttons[] = [
+                'type' => $button['type'],
+                'text' => $button['text']
+            ];
+        }
+
+        return [
+            'type' => 'BUTTON',
+            'parameters' => $buttons
+        ];
+    }
+
+
+    /**
+     * Replace placeholders in the template text with actual contact information
+     */
+    private function replacePlaceholders($text, $contact)
+    {
+        // Replace placeholders (e.g., {{1}}, {{2}}, etc.) with dynamic values from the contact
+        $placeholders = [
+            '{{1}}' => isset($contact['firstName']) ? $contact['firstName'] : '',  // Replace {{1}} with first name
+            '{{2}}' => isset($contact['lastName']) ? $contact['lastName'] : '',   // Replace {{2}} with last name
+            '{{3}}' => isset($contact['mobile']) ? $contact['mobile'] : '',       // Replace {{3}} with mobile number
+            '{{4}}' => isset($contact['email']) ? $contact['email'] : '',         // Replace {{4}} with email
+            // Add more placeholders as needed
+        ];
+
+        // Loop through all placeholders and replace them in the text
+        foreach ($placeholders as $placeholder => $replacement) {
+            $text = str_replace($placeholder, $replacement, $text);
+        }
+
+        return $text;
+    }
 
 
 
