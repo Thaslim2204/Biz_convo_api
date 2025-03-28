@@ -45,6 +45,9 @@ class GROUPMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] === 'groupbycontact') {
                     $result = $this->getGroupByContactDetails($data, $loginData);
                     return $result;
+                } elseif ($urlParam[1] === 'selectdelete') {
+                    $result = $this->selecteddataDelete($data, $loginData);
+                    return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -632,6 +635,87 @@ class GROUPMODEL extends APIRESPONSE
             throw new Exception($e->getMessage());
         }
     }
+   
+
+private function selecteddataDelete($data, $loginData)
+{
+    try {
+        $ids = $data['deleteId'];
+
+        // print_r($data);exit;
+        // Check if IDs are provided and valid
+        if (empty($ids) || !is_array($ids)) {
+            throw new Exception("Invalid input. Please provide an array of IDs.");
+        }
+
+        $db = $this->dbConnect();
+        $deleted = [];
+        $failed = [];
+
+        foreach ($ids as $id) {
+            // Validate ID
+            if (!is_numeric($id)) {
+                $failed[] = [
+                    'id' => $id,
+                    'status' => 400,
+                    'message' => 'Invalid ID format'
+                ];
+                continue;
+            }
+
+            // Check if the ID exists and is active
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact_mapping WHERE id = $id AND status=1 AND created_by ='" . $loginData['user_id'] . "'";
+            $result = $db->query($checkIdQuery);
+            $rowCount = $result->fetch_assoc()['count'];
+
+            if ($rowCount == 0) {
+                $failed[] = [
+                    'id' => $id,
+                    'status' => 400,
+                    'message' => 'Group does not exist or is already deleted'
+                ];
+                continue;
+            }
+
+            // Update delete query to set status to 0
+            $deleteQuery = "UPDATE cmp_group_contact_mapping SET status = 0 WHERE id = $id AND group_id='".$data['groupId']."'";
+            if ($db->query($deleteQuery) === true) {
+                $deleted[] = [
+                    'id' => $id,
+                    'status' => 200,
+                    'message' => 'Group details deleted successfully'
+                ];
+            } else {
+                $failed[] = [
+                    'id' => $id,
+                    'status' => 500,
+                    'message' => 'Unable to delete Group details, please try again later'
+                ];
+            }
+        }
+
+        $db->close();
+        
+        return [
+            'apiStatus' => [
+                'code' => count($failed) > 0 ? 400 : 200,
+                'message' => count($failed) > 0 ? 'Some deletions failed' : 'All deletions successful'
+            ],
+            'deleted' => $deleted,
+            'failed' => $failed
+        ];
+
+    } catch (Exception $e) {
+        return [
+            'apiStatus' => [
+                'code' => 500,
+                'message' => $e->getMessage()
+            ]
+        ];
+    }
+}
+
+
     //Group ative and deactive
     public function Groupactive($data, $loginData)
     {

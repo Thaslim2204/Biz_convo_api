@@ -16,9 +16,16 @@ class CAMPAIGNMODEL extends APIRESPONSE
                 $urlParam = explode('/', $urlPath);
                 if ($urlParam[1] == "get") {
                     $result = $this->getcampaign($data, $loginData);
-                    // } elseif ($urlParam[1] === 'timezon') {
-                    //     $result = $this->getTimezonedropdown($data, $loginData);
-                    //     return $result;
+                    } elseif ($urlParam[1] === 'dashboard') {
+                        // if ($urlParam[2] === 'active') {
+                        //     $result = $this->getDashboardactive($data, $loginData);
+                        //     return $result;
+                        // } elseif ($urlParam[2] === 'deactive') {
+                        //     // $result = $this->getDashboarddeactive($data, $loginData);
+                        //     // return $result;
+                        // }else{
+                        //     throw new Exception("Unable to proceed your request!");
+                        // }
                 } elseif ($urlParam[1] == "active") {
                     $result = $this->campaignactive($data, $loginData);
                     return $result;
@@ -317,7 +324,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
         $timezone_id = mysqli_real_escape_string($db, $data['timezone']['id']);
     // Check if timezone exists in cmp_mst_timezone
             $checkTimezoneQuery = "SELECT COUNT(*)
-            as count FROM cmp_mst_timezone WHERE id = '$timezone_id' AND zone_name = '$timezone_zoneName'";
+            as count FROM cmp_mst_timezone WHERE id = '$timezone_id' AND timezone_name = '$timezone_zoneName'";
             $result = $db->query($checkTimezoneQuery);
             $row = $result->fetch_assoc();
 
@@ -591,7 +598,7 @@ foreach ($data['variableIds'] as $variable) {
             }
 
             $db = $this->dbConnect();
-            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact WHERE id = $id AND status=1";
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_campaign WHERE id = $id AND status=1";
 
             $result = $db->query($checkIdQuery);
             $rowCount = $result->fetch_assoc()['count'];
@@ -602,19 +609,19 @@ foreach ($data['variableIds'] as $variable) {
                 return array(
                     "apiStatus" => array(
                         "code" => "400",
-                        "message" => "User ID does not exist",
+                        "message" => "Campaign ID does not exist",
                     ),
                 );
             }
-            $ActiveQuery = "UPDATE cmp_group_contact SET active_status = 1 WHERE status = 1 AND id = $id";
+            $ActiveQuery = "UPDATE cmp_campaign SET active_status = 1 WHERE status = 1 AND id = $id";
 
             if ($db->query($ActiveQuery) === true) {
                 $db->close();
                 $statusCode = "200";
-                $statusMessage = "Group activated successfully.";
+                $statusMessage = "Campaign activated successfully.";
             } else {
                 $statusCode = "500";
-                $statusMessage = "Unable to activate Group, please try again later.";
+                $statusMessage = "Unable to activate Campaign, please try again later.";
             }
             $resultArray = array(
                 "apiStatus" => array(
@@ -636,7 +643,7 @@ foreach ($data['variableIds'] as $variable) {
                 throw new Exception("Bad request");
             }
             $db = $this->dbConnect();
-            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact WHERE id = $id AND active_status=1 AND status=1";
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_campaign WHERE id = $id AND active_status=1 AND status=1";
             // print_r($checkIdQuery);exit;
 
             $result = $db->query($checkIdQuery);
@@ -646,7 +653,7 @@ foreach ($data['variableIds'] as $variable) {
             if ($rowCount == 0) {
                 $db->close();
                 $statusCode = "400";
-                $statusMessage = "User ID does not exist.";
+                $statusMessage = "Campaign ID does not exist.";
                 return array(
                     "apiStatus" => array(
                         "code" => $statusCode,
@@ -654,15 +661,15 @@ foreach ($data['variableIds'] as $variable) {
                     ),
                 );
             }
-            $deactiveQuery = "UPDATE cmp_group_contact SET active_status = 0 WHERE status = 1 AND id = $id";
+            $deactiveQuery = "UPDATE cmp_campaign SET active_status = 0 WHERE status = 1 AND id = $id";
 
             if ($db->query($deactiveQuery) === true) {
                 $db->close();
                 $statusCode = "200";
-                $statusMessage = "Group Deactivated successfully.";
+                $statusMessage = "Campaign Deactivated successfully.";
             } else {
                 $statusCode = "500";
-                $statusMessage = "Unable to Deactivate Group, please try again later.";
+                $statusMessage = "Unable to Deactivate Campaign, please try again later.";
             }
             $resultArray = array(
                 "apiStatus" => array(
@@ -854,7 +861,52 @@ foreach ($data['variableIds'] as $variable) {
     //         ];
     //     }
     // }
+    public function getDashboardactive($data, $loginData)
+    {
+        try {
+            $id = $data[3];
+            $db = $this->dbConnect();
+            if (empty($data[3])) {
+                throw new Exception("Bad request");
+            }
 
+            $db = $this->dbConnect();
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact WHERE id = $id AND status=1";
+
+            $result = $db->query($checkIdQuery);
+            $rowCount = $result->fetch_assoc()['count'];
+
+            // If ID doesn't exist, return error
+            if ($rowCount == 0) {
+                $db->close();
+                return array(
+                    "apiStatus" => array(
+                        "code" => "400",
+                        "message" => "User ID does not exist",
+                    ),
+                );
+            }
+            $ActiveQuery = "UPDATE cmp_group_contact SET active_status = 1 WHERE status = 1 AND id = $id";
+
+            if ($db->query($ActiveQuery) === true) {
+                $db->close();
+                $statusCode = "200";
+                $statusMessage = "Group activated successfully.";
+            } else {
+                $statusCode = "500";
+                $statusMessage = "Unable to activate Group, please try again later.";
+            }
+            $resultArray = array(
+                "apiStatus" => array(
+                    "code" => $statusCode,
+                    "message" => $statusMessage,
+                ),
+            );
+            return $resultArray;
+        } catch (Exception $e) {
+            throw new Exception($e->getMessage());
+        }
+    }
 
 
     /**

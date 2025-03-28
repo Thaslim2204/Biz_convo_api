@@ -33,9 +33,9 @@ class COMMONMODEL extends APIRESPONSE
             case 'POST':
                 $urlPath = $_GET['url'];
                 $urlParam = explode('/', $urlPath);
-                if ($urlParam[1] === 'create') {
-                    // $result = $this->createGroup($data, $loginData);
-                    // return $result;
+                if ($urlParam[1] === 'myprofile') {
+                    $result = $this->myprofileupdate($data, $loginData);
+                    return $result;
                 } elseif ($urlParam[1] === 'list') {
                     // $result = $this->getGroupDetails($data, $loginData);
                     // return $result;
@@ -112,7 +112,8 @@ class COMMONMODEL extends APIRESPONSE
 
             while ($row = mysqli_fetch_array($result, MYSQLI_ASSOC)) {
                 $GroupData[] = $row;
-            }  $responseArray = array(
+            }
+            $responseArray = array(
                 "totalRecordCount" => $row_cnt,
                 "CountryData" => $GroupData,
             );
@@ -154,7 +155,8 @@ class COMMONMODEL extends APIRESPONSE
 
             while ($row = mysqli_fetch_array($result, MYSQLI_ASSOC)) {
                 $GroupData[] = $row;
-            }  $responseArray = array(
+            }
+            $responseArray = array(
                 "totalRecordCount" => $row_cnt,
                 "CountryData" => $GroupData,
             );
@@ -175,6 +177,128 @@ class COMMONMODEL extends APIRESPONSE
             );
         }
     }
+
+    private function myprofileupdate($data, $loginData)
+    {
+        try {
+            $db = $this->dbConnect();
+            // Restrict updates if the logged-in user is a super_admin
+            if ($loginData['role_name'] === 'super_admin') {
+                throw new Exception("Permission denied. Super Admin cannot update details.");
+            }
+
+            // Check if the User ID exists and is active
+            $userId = $db->real_escape_string($loginData['user_id']);
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_users WHERE id = '$userId' AND status = 1";
+            $result = $db->query($checkIdQuery);
+            $rowCount = $result->fetch_assoc()['count'];
+
+            if ($rowCount == 0) {
+                $db->close();
+                return [
+                    "apiStatus" => [
+                        "code" => "400",
+                        "message" => "User does not exist",
+                    ],
+                ];
+            }
+
+            // Check if username or email already exists
+            $userName = $db->real_escape_string($data['userName']);
+            $email = $db->real_escape_string($data['emailId']);
+            $userIdToUpdate = $db->real_escape_string($loginData['user_id']);
+
+            $checkUserQuery = "SELECT COUNT(*) AS count FROM cmp_users 
+                           WHERE (username = '$userName' OR email = '$email') 
+                           AND id != '$userIdToUpdate'";
+            $userResult = $db->query($checkUserQuery);
+            $userCount = $userResult->fetch_assoc()['count'];
+
+            if ($userCount > 0) {
+                $db->close();
+                return [
+                    "apiStatus" => [
+                        "code" => "400",
+                        "message" => "Username or email already exists",
+                    ],
+                ];
+            }
+
+            $dateNow = date("Y-m-d H:i:s", strtotime('+4 hours 30 minutes'));
+
+            // Initialize vendorUpdated as false
+            $vendorUpdated = false;
+
+            // Validate input fields
+            $validationData = [
+                "First Name" => $data['firstName'],
+                "Last Name" => $data['lastName'],
+                "Username" => $data['userName'],
+                "Email" => $data['emailId'],
+                "Phone" => $data['phone']
+            ];
+            $this->validateInputDetails($validationData);
+
+            // Construct update query dynamically
+            $updateFields = [];
+            if (!empty($data['firstName'])) {
+                $updateFields[] = "first_name = '{$db->real_escape_string($data['firstName'])}'";
+            }
+            if (!empty($data['lastName'])) {
+                $updateFields[] = "last_name = '{$db->real_escape_string($data['lastName'])}'";
+            }
+            if (!empty($data['userName'])) {
+                $updateFields[] = "username = '{$db->real_escape_string($data['userName'])}'";
+            }
+            if (!empty($data['emailId'])) {
+                $updateFields[] = "email = '{$db->real_escape_string($data['emailId'])}'";
+            }
+            if (!empty($data['phone'])) {
+                $updateFields[] = "mobile = '{$db->real_escape_string($data['phone'])}'";
+            }
+            if (isset($data['activeStatus'])) {
+                $updateFields[] = "active_status = '{$db->real_escape_string($data['activeStatus'])}'";
+            }
+
+            // Only execute update if there are fields to update
+            if (!empty($updateFields)) {
+                $updateFields[] = "updated_by = '$userId'";
+                $updateFields[] = "updated_date = '$dateNow'";
+                $updateVendorQuery = "UPDATE cmp_users SET " . implode(", ", $updateFields) . " WHERE id = '$userId' AND status = 1";
+
+                if ($db->query($updateVendorQuery) === false) {
+                    $db->close();
+                    return [
+                        "apiStatus" => [
+                            "code" => "500",
+                            "message" => "Unable to update user details, please try again later",
+                        ],
+                    ];
+                }
+                $vendorUpdated = true;
+            }
+
+            $db->close();
+
+            // Construct the response message
+            $message = $vendorUpdated ? "User details updated successfully" : "No changes made to user details";
+
+            return [
+                "apiStatus" => [
+                    "code" => "200",
+                    "message" => $message,
+                ],
+            ];
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "401",
+                    "message" => $e->getMessage(),
+                ],
+            ];
+        }
+    }
+
 
     /**
      * Validate function for tenant create

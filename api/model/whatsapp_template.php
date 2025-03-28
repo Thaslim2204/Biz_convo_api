@@ -32,7 +32,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                     $result = $this->templateList($data, $loginData);
                     return $result;
                 } else if ($urlParam[1] == "sendMessage") {
-                    $result = $this->sendMessage($data, $loginData);
+                    $result = $this->sendMessage($data, $loginData, "");
                 } else if ($urlParam[1] == "uploadMedia") {
                     $result = $this->uploadMedia($data, $loginData);
                 } elseif ($urlParam[1] === 'testing') {
@@ -100,6 +100,8 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             $db = $this->dbConnect();
             $this->fbCredentials($loginData);
 
+            $mediaId = $request['mediaId'] ? $request['mediaId'] : "";
+
             $url =  $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->whatsapp_business_id . '/' . "message_templates";
             // print_r($url);exit;
             // template update
@@ -165,6 +167,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                         template_name = '" . mysqli_real_escape_string($db, $request["name"]) . "',
                         category = '" . mysqli_real_escape_string($db, $request["category"]) . "',
                         body_data = '" . mysqli_real_escape_string($db, json_encode($body)) . "',
+                        media_id = '".$mediaId."',
                         updated_by = '" . $loginData['user_id'] . "',
                         updated_date = NOW()
                         WHERE template_id = '" . $template_id . "'";
@@ -173,10 +176,10 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             } else {
                 //Insertion query
                 $sql = "INSERT INTO cmp_whatsapp_templates 
-                        (uid, vendor_id, template_id, template_name, category, language, body_data, template_status, created_by) 
+                        (uid, vendor_id, template_id, template_name, category, language, body_data, media_id, template_status, created_by) 
                         VALUES 
                         ('" . $uid . "','" . $vendor_id . "', '" . $template_id . "','" . mysqli_real_escape_string($db, $request["name"]) . "', '" . mysqli_real_escape_string($db, $request["category"]) . "', 
-                        '" . mysqli_real_escape_string($db, $request["language"]) . "', '" . mysqli_real_escape_string($db, json_encode($body)) . "', '" . $template_status . "', '" . $loginData['user_id'] . "'
+                        '" . mysqli_real_escape_string($db, $request["language"]) . "', '" . mysqli_real_escape_string($db, json_encode($body)) . "', '".$mediaId."' , '" . $template_status . "', '" . $loginData['user_id'] . "'
                         )";
 
                 $db->query($sql);
@@ -337,7 +340,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
     public function templateByID($data, $loginData)
     {
         try {
-            // print_r($data);
+            // print_r($loginData);
             $template_id = $data[2];
             if (empty($template_id)) {
                 throw new Exception("Give template id");
@@ -371,12 +374,13 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             // echo $response;exit;
 
             $db = $this->dbConnect();
-            $sql = "SELECT id, template_id, created_date, updated_date from cmp_whatsapp_templates where status = 1 and template_id = '" . $template_id . "' AND created_by = '" . $loginData['user_id'] . "'";
+            $sql = "SELECT id, template_id, media_id, created_date, updated_date from cmp_whatsapp_templates where status = 1 and template_id = '" . $template_id . "' AND created_by = '" . $loginData['user_id'] . "'";
             $result = $db->query($sql);
             $dbData = $result->fetch_assoc();
-
+            // print_r($sql);exit;
             $responseData['created_date'] = $dbData['created_date'] ?? null;
             $responseData['updated_date'] = $dbData['updated_date'] ?? null;
+            $responseData['media_id'] = $dbData['media_id'] ?? null;
 
             if ($httpCode == "200") {
                 return array(
@@ -685,8 +689,16 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                 ));
 
                 $response = curl_exec($curl);
-                echo $response;
+                // echo $response;
                 curl_close($curl);
+                $firstResponse = json_decode($response, true);
+
+                // After uploading, get the media ID from the upload media
+                $mediaData = $this->uploadMediaGetID($loginData, $file);
+                if (isset($mediaData)) {
+                    $mergedResponse = array_merge($firstResponse, $mediaData);
+                    echo json_encode($mergedResponse, JSON_PRETTY_PRINT);
+                }    
                 exit;
             }
         } catch (Exception $e) {
@@ -699,43 +711,53 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
         }
     }
 
-    public function uploadMediaGetID($loginData)
-    {
-        try {
-            $this->fbCredentials($loginData);
+    public function uploadMediaGetID($loginData, $file)
+{
+    try {
+        // print_r($file);exit;
+        $this->fbCredentials($loginData);
 
-            $uploadUrl = $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->phone_no_id . '/media';
-               
-            $curl = curl_init();
+        $uploadUrl = $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->phone_no_id . '/media';
+        // print_r($uploadUrl);exit;
+        // Now, pass the uploaded file dynamically using $_FILES data
+        $curl = curl_init();
 
-            curl_setopt_array($curl, array(
-                CURLOPT_URL => 'https://graph.facebook.com/v22.0/637421792778479/media',
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => 'POST',
-                CURLOPT_POSTFIELDS => array('messaging_product' => 'whatsapp', 'file' => new CURLFILE('/C:/Users/Hermon/Pictures/Actors/actor.png')),
-                CURLOPT_HTTPHEADER => array(
-                    'file_offset: 0',
-                    'Authorization: ••••••'
-                ),
-            ));
+        curl_setopt_array($curl, array(
+            CURLOPT_URL => $uploadUrl,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => '',
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 0,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_POSTFIELDS => array(
+                'messaging_product' => 'whatsapp',
+                'file' => new CURLFILE($file['tmp_name'], $file['type'], $file['name'])  
+            ),
+            CURLOPT_HTTPHEADER => array(
+                'file_offset: 0',
+                'Authorization: OAuth ' . $this->fb_auth_token,
+            ),
+        ));
+        // echo $this->fb_auth_token;exit;
+        $response = curl_exec($curl);
+        // print_r($response);exit;
+        curl_close($curl);
 
-            $response = curl_exec($curl);
+        $responseDecoded = json_decode($response, true);
+        // Return the response from media upload to extract the media ID
+        return $responseDecoded;
 
-            curl_close($curl);
-        } catch (Exception $e) {
-            return array(
-                "apiStatus" => array(
-                    "code" => "401",
-                    "message" => $e->getMessage(),
-                ),
-            );
-        }
+    } catch (Exception $e) {
+        return array(
+            "apiStatus" => array(
+                "code" => "401",
+                "message" => $e->getMessage(),
+            ),
+        );
     }
+}
 
     private function getUsingCampCredentials($data, $loginData)
     {
@@ -778,6 +800,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                 $template_id = $data['templateId'];
                 $templateResponse = $this->templateByID(["", "", $template_id], $loginData);
                 $templateData = $templateResponse['result'];
+                // print_r(json_encode($templateResponse));exit;
                 // Return contacts along with template
                 return [
                     "apiStatus" => [
@@ -802,10 +825,9 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
         }
     }
 
-    public function sendMessage($data, $loginData, $campaign_id)
+    public function sendMessage($data, $loginData,$campaign_id)
     {
         try {
-            // print_r($data);exit;
             $db = $this->dbConnect();
             // Fetch contacts and template dynamically
             $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
@@ -819,7 +841,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             $contacts = $fetchResponse['result']['contacts'];  // List of contacts
             $template = $fetchResponse['result']['template'];  // Template data
 
-            // print_r(json_encode($contacts));exit;
+            // print_r(json_encode());exit;
             // Initialize arrays to store success and failure recipients
             $successRecipient = [];
             $failureRecipient = [];
@@ -829,7 +851,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             foreach ($contacts as $contact) {
                 // Prepare dynamic components based on the template and the contact data
                 // print_r(json_encode($data['variableIds']));
-                $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds']);
+                $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'],$template['media_id']);
                 print_r(json_encode($dynamicComponents, true));
                 // Build the message body
                 $body = [
@@ -886,7 +908,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             $responses = [
                 "apiStatus" => [
                     "code" => "200",
-                    "message" => "WhatsApp template message sent successfully",
+                    "message" => "WhatsApp template message executed successfully",
                 ],
                 "result" => [
                     "successRecipients" => $successRecipient,
@@ -909,9 +931,9 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
     /**
      * Prepare dynamic components based on the template and contact data
      */
-    private function prepareDynamicComponents($templateComponents, $contact, $variableIds)
+    private function prepareDynamicComponents($templateComponents, $contact, $variableIds, $mediaId)
     {
-        // print_r(($variableIds));
+        // print_r((json_encode($mediaId)));
         // exit;
 
         // print_r($variableIds['body']);exit;
@@ -926,13 +948,17 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             switch ($component['type']) {
                 case 'HEADER':
                     // If header contains text (replace placeholders like {{1}}, {{2}} etc.)
-                    if (isset($component['format']) == 'text' && isset($component['example']['header_text'])) {
+                    if (isset($component['format']) == 'TEXT' && isset($component['example']['header_text'])) {
                         // Replace placeholders in header text dynamically
+                    // echo "csdkf";exit;
+                        
                         // print_r(json_encode($variableIds));
                         $headerHasVariable = true;
                         $dynamicComponents[] = $this->prepareHeaderTextComponent($component, $contact, $variableIds);
-                    } else if (isset($component['format']) != 'text') {
-                        $dynamicComponents[] = $this->prepareHeaderMediaComponent($component, $contact);
+                    } else if ($component['format'] != 'TEXT') {
+                    // echo "csdkf";exit;
+                        
+                        $dynamicComponents[] = $this->prepareHeaderMediaComponent($component, $contact, $mediaId);
                     }
                     break;
 
@@ -1002,8 +1028,9 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
     }
 
 
-    private function prepareHeaderMediaComponent($component, $contact)
+    private function prepareHeaderMediaComponent($component, $contact, $mediaId)
     {
+        // print_r($component);exit;
         // Assuming the header media is an image (you can extend this for other media types like video)
         if (isset($component['format'])) {
             return [
@@ -1013,7 +1040,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                         'type' => $component['format'],
                         strtolower($component['format']) => [
                             // 'link' => $component['example']['header_handle'][0]
-                            "id" => "8936761253094436"
+                            "id" => $mediaId
                         ]
                     ]
                 ]
