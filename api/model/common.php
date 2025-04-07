@@ -25,6 +25,9 @@ class COMMONMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] == "timezonedropdown") {
                     $result = $this->timeZonedropdown($data, $loginData);
                     return $result;
+                } elseif ($urlParam[1] === 'getmyprofile') {
+                    $result = $this->getmyprofile($data, $loginData);
+                    return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -36,13 +39,10 @@ class COMMONMODEL extends APIRESPONSE
                 if ($urlParam[1] === 'myprofile') {
                     $result = $this->myprofileupdate($data, $loginData);
                     return $result;
-                } elseif ($urlParam[1] === 'list') {
-                    // $result = $this->getGroupDetails($data, $loginData);
-                    // return $result;
-                } elseif ($urlParam[1] === 'payloadStructure') {
-                    // // print_r($data);exit;
-                    // $result = $this->getpayloadstructure($data, $loginData);
-                    // return $result;
+                
+                } elseif ($urlParam[1] === "changepassword") {
+                    $result = $this->changepassword($data, $loginData);
+                    return $result;
                 } elseif ($urlParam[1] === 'groupbycontact') {
                     // $result = $this->getGroupByContactDetails($data, $loginData);
                     // return $result;
@@ -177,6 +177,50 @@ class COMMONMODEL extends APIRESPONSE
             );
         }
     }
+    private function getmyprofile($data,$loginData)
+{
+    try {
+        $db = $this->dbConnect();
+// print_r($loginData);exit;
+        // Get the user ID from loginData
+        $userId = ($loginData['user_id']);
+
+        // Check if the User ID exists and is active
+        $checkIdQuery = "SELECT id,first_name,last_name,username,email,mobile,status FROM cmp_users WHERE id = '$userId' AND status = 1 AND active_status=1";
+        // print_r($checkIdQuery);exit;
+        $result = $db->query($checkIdQuery);
+
+        if ($result === false || $result->num_rows === 0) {
+            $db->close();
+            return [
+                "apiStatus" => [
+                    "code" => "400",
+                    "message" => "User not found or inactive",
+                ],
+            ];
+        }
+
+        // Fetch the user data
+        $userData = $result->fetch_assoc();
+        $db->close();
+
+        return [
+            "apiStatus" => [
+                "code" => "200",
+                "message" => "User profile retrieved successfully",
+            ],
+            "UserData" => $userData
+        ];
+    } catch (Exception $e) {
+        return [
+            "apiStatus" => [
+                "code" => "401",
+                "message" => $e->getMessage(),
+            ],
+        ];
+    }
+}
+
 
     private function myprofileupdate($data, $loginData)
     {
@@ -256,9 +300,9 @@ class COMMONMODEL extends APIRESPONSE
             if (!empty($data['phone'])) {
                 $updateFields[] = "mobile = '{$db->real_escape_string($data['phone'])}'";
             }
-            if (isset($data['activeStatus'])) {
-                $updateFields[] = "active_status = '{$db->real_escape_string($data['activeStatus'])}'";
-            }
+                // if (isset($data['activeStatus'])) {
+                //     $updateFields[] = "active_status = '{$db->real_escape_string($data['activeStatus'])}'";
+                // }
 
             // Only execute update if there are fields to update
             if (!empty($updateFields)) {
@@ -383,6 +427,82 @@ class COMMONMODEL extends APIRESPONSE
         }
     }
 
+
+    private function changePassword($data, $loginData)
+    {
+        // echo"123";exit;
+        try {
+            if ($loginData['role_name'] === 'super_admin') {
+                throw new Exception("Permission denied. Super Admin cannot update details.");
+            }
+
+            // Input validation
+            $requiredFields = ['oldPassword', 'newPassword', 'confirmPassword'];
+            foreach ($requiredFields as $field) {
+                if (empty($data[$field])) {
+                    throw new Exception("Please enter $field.");
+                }
+            }
+    
+            if ($data['newPassword'] !== $data['confirmPassword']) {
+                throw new Exception("New password and confirm password do not match");
+            }
+    
+            // Connect to the database
+            $db = $this->dbConnect();
+    
+            // Fetch user's current password
+            $uid = $loginData['user_id'];
+            $query = "SELECT password FROM cmp_users WHERE id = $uid";
+            $result = $db->query($query);
+    
+            if (!$result || $result->num_rows == 0) {
+                throw new Exception("User not found");
+            }
+    
+            $row = $result->fetch_assoc();
+            $hashedOldPassword = $row['password'];
+            $oldpassword = hash('sha256', hash('sha256', $data['oldPassword']));
+            
+            // Verify old password
+            if ($hashedOldPassword != $oldpassword) {
+                throw new Exception("Incorrect old password");
+            }
+    
+            // Hash new password
+            $hashedNewPassword = hash('sha256', hash('sha256', $data['newPassword']));
+            // print_r($hashedNewPassword);exit;
+            // Update password
+            $updateQuery = "UPDATE cmp_users SET password = '$hashedNewPassword' , updated_by='".$loginData['user_id']."' WHERE id = $uid ";
+            // print_r($updateQuery);exit;
+            if (!$db->query($updateQuery)) {
+                throw new Exception("Failed to update password");
+            }
+    
+            // Close database connection
+            $db->close();
+            $statusCode = "200";
+            $statusMessage = "Password changed successfully.";
+    
+            // Success message
+            return array(
+                "apiStatus" => array(
+                    "code" => $statusCode,
+                    "message" => $statusMessage,
+                ),
+            );
+    
+        } catch (Exception $e) {
+            // Error message
+            return array(
+                "apiStatus" => array(
+                    "code" => 401,
+                    "message" => $e->getMessage(),
+                ),
+            );
+        }
+    }
+    
     // Unautherized api request
     private function handle_error() {}
     /**

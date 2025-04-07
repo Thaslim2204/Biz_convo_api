@@ -23,16 +23,21 @@ class STOREMODEL extends APIRESPONSE
                 $urlParam = explode('/', $urlPath);
                 if ($urlParam[1] == "get") {
                     $result = $this->getStore($data, $loginData);
-                } elseif ($urlParam[1] == "active") {
-                    $result = $this->useractive($data, $loginData);
-                    return $result;
-                } elseif ($urlParam[1] == "deactive") {
-                    $result = $this->userdeactive($data, $loginData);
+                
                 } elseif ($urlParam[1] === 'storedropdown') {
                     $result = $this->getStoredropdown($data, $loginData);
                     return $result;
                 } elseif ($urlParam[1] === 'exportstoretoexcel') {
                     $result = $this->exportStoreToExcel($data, $loginData);
+                    return $result;
+                } elseif ($urlParam[1] === 'isheader') {
+                    $result = $this->isheaderonly($data, $loginData);
+                    return $result;
+                } elseif ($urlParam[1] == "active") {
+                    $result = $this->useractive($data, $loginData);
+                    return $result;
+                } elseif ($urlParam[1] == "deactive") {
+                    $result = $this->userdeactive($data, $loginData);
                     return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
@@ -48,10 +53,10 @@ class STOREMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] === 'list') {
                     $result = $this->getStoredetails($data, $loginData);
                     return $result;
-                
                 } elseif ($urlParam[1] === 'importstorefromexcel') {
                     $result = $this->importStoreFromExcel($data, $loginData);
                     return $result;
+              
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -431,7 +436,7 @@ class STOREMODEL extends APIRESPONSE
                 $updateVendorQuery .= " updated_by = '{$loginData['user_id']}',
                         updated_date = '{$dateNow}'
                         WHERE id = '{$data['id']}' AND status = 1";
-// print_r($updateVendorQuery);exit;
+                // print_r($updateVendorQuery);exit;
 
                 if ($db->query($updateVendorQuery) === false) {
                     $db->close();
@@ -532,7 +537,6 @@ class STOREMODEL extends APIRESPONSE
             throw new Exception($e->getMessage());
         }
     }
-    //store ative and deactive
     public function useractive($data, $loginData)
     {
         try {
@@ -579,6 +583,7 @@ class STOREMODEL extends APIRESPONSE
             throw new Exception($e->getMessage());
         }
     }
+    
     public function userdeactive($data, $loginData)
     {
         try {
@@ -627,6 +632,7 @@ class STOREMODEL extends APIRESPONSE
             throw new Exception($e->getMessage());
         }
     }
+    
 
     public function importStoreFromExcel($data, $loginData)
     {
@@ -701,7 +707,7 @@ class STOREMODEL extends APIRESPONSE
                     $storeRow = $storeResult->fetch_assoc();
                     $store_id = $storeRow['id'];
                 } else {
-                    
+
                     // Insert Store into cmp_store
                     $insertStoreQuery = "INSERT INTO cmp_store (uid,store_name, address, phone, email, created_by, status) 
                                          VALUES (' $uid ','$storeName', '$address', '$phone', '$email', '$user_id', 1)";
@@ -792,16 +798,15 @@ class STOREMODEL extends APIRESPONSE
                 $rowIndex++;
             }
 
-             // **Output the file directly for download**
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment; filename="Staff_Data_' . date('Ymd_His') . '.xlsx"');
-        header('Cache-Control: max-age=0');
+            // **Output the file directly for download**
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="Staff_Data_' . date('Ymd_His') . '.xlsx"');
+            header('Cache-Control: max-age=0');
 
-        $writer = new Xlsx($spreadsheet);
-        $writer->save('php://output'); // Send file to browser directly
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output'); // Send file to browser directly
 
-        exit; 
-
+            exit;
         } catch (Exception $e) {
             return [
                 "apiStatus" => [
@@ -812,6 +817,56 @@ class STOREMODEL extends APIRESPONSE
         }
     }
 
+    public function isheaderonly($data, $loginData)
+    {
+        try {
+            $db = $this->dbConnect();
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+
+            // Get the Contact id from the login data
+            $user_id = $loginData['user_id'];
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
+            $result = $db->query($sql);
+
+            if ($result) {
+                $row = $result->fetch_assoc();
+                if (!$row || !isset($row['vendor_id'])) {
+                    throw new Exception("Vendor ID not found for user ID: $user_id");
+                }
+                $vendor_id = $row['vendor_id'];
+            } else {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+
+            // Set column headers
+            $headers = ['S.No', 'Store Name', 'Address', 'Phone', 'Email'];
+            $column = 'A';
+            foreach ($headers as $header) {
+                $sheet->setCellValue($column . '1', $header);
+                $sheet->getStyle($column . '1')->getFont()->setBold(true);
+                $sheet->getStyle($column . '1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getColumnDimension($column)->setAutoSize(true);
+                $column++;
+            }
+
+            // Output the file directly for download
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="Store_Data_' . date('Ymd_His') . '.xlsx"');
+            header('Cache-Control: max-age=0');
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+            exit;
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "401",
+                    "message" => $e->getMessage()
+                ]
+            ];
+        }
+    }
 
 
     /**

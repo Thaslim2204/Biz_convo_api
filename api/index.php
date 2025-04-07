@@ -7,6 +7,9 @@ header("Access-Control-Allow-Headers: Access-Control-Allow-Headers, X-Requested-
 // ini_set ( "display_errors", 1 );
 include "include/config.php";
 
+// print_r($_SERVER['REQUEST_URI']);
+// print_r($_GET);exit;
+
 // Turn off error reporting
 error_reporting(1);
 // echo"bismillah irahuman irahim";exit;

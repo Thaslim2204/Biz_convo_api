@@ -24,6 +24,7 @@ class GROUPMODEL extends APIRESPONSE
                     return $result;
                 } elseif ($urlParam[1] == "deactive") {
                     $result = $this->Groupdeactive($data, $loginData);
+                    return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -36,6 +37,10 @@ class GROUPMODEL extends APIRESPONSE
                     $result = $this->createGroup($data, $loginData);
                     return $result;
                 } elseif ($urlParam[1] === 'list') {
+                    if ($urlParam[2] === 'archive') {
+                        $result = $this->getArchiveGroupDetails($data, $loginData);
+                        return $result;
+                    }
                     $result = $this->getGroupDetails($data, $loginData);
                     return $result;
                 } elseif ($urlParam[1] === 'payloadStructure') {
@@ -47,6 +52,15 @@ class GROUPMODEL extends APIRESPONSE
                     return $result;
                 } elseif ($urlParam[1] === 'selectdelete') {
                     $result = $this->selecteddataDelete($data, $loginData);
+                    return $result;
+                } elseif ($urlParam[1] === 'groupselectdelete') {
+                    $result = $this->selecteddatagroupDelete($data, $loginData);
+                    return $result;
+                } elseif ($urlParam[1] == "activeachieve") {
+                    $result = $this->Groupactiveachieve($data, $loginData);
+                    return $result;
+                } elseif ($urlParam[1] == "deactiveachieve") {
+                    $result = $this->Groupdeactiveachieve($data, $loginData);
                     return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
@@ -114,7 +128,7 @@ class GROUPMODEL extends APIRESPONSE
             // Query to fetch vendors and their contact persons0
             $queryService = "SELECT id,uid,vendor_id,group_name,description,active_status,status,created_by,created_date,updated_by,updated_date
                  FROM cmp_group_contact 
-                 WHERE status = 1 AND vendor_id = " . $this->getVendorIdByUserId($loginData) . "
+                 WHERE status = 1  AND active_status = 1 AND vendor_id = " . $this->getVendorIdByUserId($loginData) . "
                  ORDER BY id DESC 
                  LIMIT $start_index, $end_index";
 
@@ -245,7 +259,7 @@ class GROUPMODEL extends APIRESPONSE
         ORDER BY gc.id DESC 
    
         ";
-        // print_r($queryService);exit;
+            // print_r($queryService);exit;
             //      LIMIT $start_index, $end_index
 
             $result = $db->query($queryService);
@@ -325,7 +339,90 @@ class GROUPMODEL extends APIRESPONSE
         }
     }
 
+    public function getArchiveGroupDetails($data, $loginData)
+    {
+        try {
+            $responseArray = ''; // Initializing response variable
+            $db = $this->dbConnect();
+            $recordCount = $this->getArchiveTotalCount($loginData);
 
+            // Check if pageIndex and dataLength are not empty
+            if ($data['pageIndex'] === "") {
+                throw new Exception("PageIndex should not be empty!");
+            }
+            if ($data['dataLength'] == "") {
+                throw new Exception("dataLength should not be empty!");
+            }
+
+            $start_index = $data['pageIndex'] * $data['dataLength'];
+            $end_index = $data['dataLength'];
+
+            // Query to fetch vendors and their contact persons0
+            $queryService = "SELECT id,uid,vendor_id,group_name,description,active_status,status,created_by,created_date,updated_by,updated_date
+                 FROM cmp_group_contact 
+                 WHERE status = 1 AND active_status=0 AND vendor_id = " . $this->getVendorIdByUserId($loginData) . "
+                 ORDER BY id DESC 
+                 LIMIT $start_index, $end_index";
+
+            //   print_r($queryService);exit;
+            $result = $db->query($queryService);
+            $row_cnt = mysqli_num_rows($result);
+
+            $group = array(); // Initialize array to hold Store data
+            if ($row_cnt > 0) {
+                while ($row = $result->fetch_assoc()) {
+                    $group[] = array(
+                        "groupId" => $row['id'],
+                        "groupUid" => $row['uid'],
+                        "groupName" => $row['group_name'],
+                        "description" => $row['description'],
+                        "activeStatus" => $row['active_status'],
+                        "createdBy" => $row['created_by'],
+                        "createdDate" => $row['created_date'],
+                        "updatedBy" => $row['updated_by'],
+                        "updatedDate" => $row['updated_date'],
+                        "status" => $row['status']
+                    );
+                }
+            }
+
+            // Construct the final response array
+            $responseArray = array(
+                "pageIndex" => $data['pageIndex'],
+                "dataLength" => $data['dataLength'],
+                "totalRecordCount" => $recordCount,
+                'GroupData' => array_values($group), // Reset array keys
+            );
+
+            // Check if Store data exists
+            if (!empty($group)) {
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "200",
+                        "message" => "Group details fetched successfully",
+                    ),
+                    "result" => $responseArray,
+                );
+            } else {
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "404",
+                        "message" => "No data found...",
+                    ),
+                );
+            }
+
+            // Return the result array
+            return $resultArray;
+        } catch (Exception $e) {
+            return array(
+                "apiStatus" => array(
+                    "code" => "500",
+                    "message" => $e->getMessage(),
+                ),
+            );
+        }
+    }
 
     /**
      * Function is to get the for particular record
@@ -635,88 +732,207 @@ class GROUPMODEL extends APIRESPONSE
             throw new Exception($e->getMessage());
         }
     }
-   
 
-private function selecteddataDelete($data, $loginData)
-{
-    try {
-        $ids = $data['deleteId'];
 
-        // print_r($data);exit;
-        // Check if IDs are provided and valid
-        if (empty($ids) || !is_array($ids)) {
-            throw new Exception("Invalid input. Please provide an array of IDs.");
-        }
+    private function selecteddataDelete($data, $loginData)
+    {
+        // try {
+        //     $ids = $data['deleteId'];
 
-        $db = $this->dbConnect();
-        $deleted = [];
-        $failed = [];
+        //     // print_r($data);exit;
+        //     // Check if IDs are provided and valid
+        //     if (empty($ids) || !is_array($ids)) {
+        //         throw new Exception("Invalid input. Please provide an array of IDs.");
+        //     }
 
-        foreach ($ids as $id) {
-            // Validate ID
-            if (!is_numeric($id)) {
-                $failed[] = [
-                    'id' => $id,
-                    'status' => 400,
-                    'message' => 'Invalid ID format'
-                ];
-                continue;
-            }
+        //     $db = $this->dbConnect();
+        //     $deleted = [];
+        //     $failed = [];
 
-            // Check if the ID exists and is active
-            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact_mapping WHERE id = $id AND status=1 AND created_by ='" . $loginData['user_id'] . "'";
-            $result = $db->query($checkIdQuery);
-            $rowCount = $result->fetch_assoc()['count'];
+        //     foreach ($ids as $id) {
+        //         // Validate ID
+        //         if (!is_numeric($id)) {
+        //             $failed[] = [
+        //                 'id' => $id,
+        //                 'status' => 400,
+        //                 'message' => 'Invalid ID format'
+        //             ];
+        //             continue;
+        //         }
 
-            if ($rowCount == 0) {
-                $failed[] = [
-                    'id' => $id,
-                    'status' => 400,
-                    'message' => 'Group does not exist or is already deleted'
-                ];
-                continue;
-            }
+        //         // Check if the ID exists and is active
+        //         $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact_mapping WHERE id = $id AND status=1 AND created_by ='" . $loginData['user_id'] . "'";
+        //         $result = $db->query($checkIdQuery);
+        //         $rowCount = $result->fetch_assoc()['count'];
 
-            // Update delete query to set status to 0
-            $deleteQuery = "UPDATE cmp_group_contact_mapping SET status = 0 WHERE id = $id AND group_id='".$data['groupId']."'";
-            if ($db->query($deleteQuery) === true) {
-                $deleted[] = [
-                    'id' => $id,
-                    'status' => 200,
-                    'message' => 'Group details deleted successfully'
-                ];
-            } else {
-                $failed[] = [
-                    'id' => $id,
-                    'status' => 500,
-                    'message' => 'Unable to delete Group details, please try again later'
-                ];
-            }
-        }
+        //         if ($rowCount == 0) {
+        //             $failed[] = [
+        //                 'id' => $id,
+        //                 'status' => 400,
+        //                 'message' => 'Group does not exist or is already deleted'
+        //             ];
+        //             continue;
+        //         }
 
-        $db->close();
-        
-        return [
-            'apiStatus' => [
-                'code' => count($failed) > 0 ? 400 : 200,
-                'message' => count($failed) > 0 ? 'Some deletions failed' : 'All deletions successful'
-            ],
-            'deleted' => $deleted,
-            'failed' => $failed
-        ];
+        //         // Update delete query to set status to 0
+        //         $deleteQuery = "UPDATE cmp_group_contact_mapping SET status = 0 WHERE id = $id AND group_id='".$data['groupId']."'";
+        //         if ($db->query($deleteQuery) === true) {
+        //             $deleted[] = [
+        //                 'id' => $id,
+        //                 'status' => 200,
+        //                 'message' => 'Group details deleted successfully'
+        //             ];
+        //         } else {
+        //             $failed[] = [
+        //                 'id' => $id,
+        //                 'status' => 500,
+        //                 'message' => 'Unable to delete Group details, please try again later'
+        //             ];
+        //         }
+        //     }
 
-    } catch (Exception $e) {
-        return [
-            'apiStatus' => [
-                'code' => 500,
-                'message' => $e->getMessage()
-            ]
-        ];
+        //     $db->close();
+
+        //     return [
+        //         'apiStatus' => [
+        //             'code' => count($failed) > 0 ? 400 : 200,
+        //             'message' => count($failed) > 0 ? 'Some deletions failed' : 'All deletions successful'
+        //         ],
+        //         'deleted' => $deleted,
+        //         'failed' => $failed
+        //     ];
+
+        // } catch (Exception $e) {
+        //     return [
+        //         'apiStatus' => [
+        //             'code' => 500,
+        //             'message' => $e->getMessage()
+        //         ]
+        //     ];
+        // }
     }
-}
 
 
     //Group ative and deactive
+    public function Groupactiveachieve($data, $loginData)
+    {
+        try {
+            // Step 1: Validate input
+            if (!isset($data['id']) || empty($data['id'])) {
+                throw new Exception("Bad request. 'id' field is required.");
+            }
+
+            // Normalize to array and sanitize IDs
+            $ids = is_array($data['id']) ? $data['id'] : [$data['id']];
+            $ids = array_map('intval', $ids);
+
+            $db = $this->dbConnect();
+            $idList = implode(',', $ids);
+
+            // Step 2: Check if group contact IDs exist and are active (status = 1)
+            $checkQuery = "SELECT id FROM cmp_group_contact WHERE id IN ($idList) AND status = 1";
+            $result = $db->query($checkQuery);
+
+            $foundIds = [];
+            while ($row = $result->fetch_assoc()) {
+                $foundIds[] = $row['id'];
+            }
+
+            $missingIds = array_diff($ids, $foundIds);
+
+            // Step 3: If some IDs are invalid, return error
+            if (!empty($missingIds)) {
+                $db->close();
+                return array(
+                    "apiStatus" => array(
+                        "code" => "400",
+                        "message" => "These group contact IDs do not exist or are inactive: " . implode(', ', $missingIds),
+                    ),
+                );
+            }
+
+            // Step 4: Activate valid group contacts
+            $activateQuery = "UPDATE cmp_group_contact SET active_status = 1 WHERE id IN ($idList) AND status = 1";
+            if ($db->query($activateQuery) === true) {
+                $statusCode = "200";
+                $statusMessage = "Group contact(s) activated successfully.";
+            } else {
+                $statusCode = "500";
+                $statusMessage = "Unable to activate group contact(s), please try again later.";
+            }
+
+            $db->close();
+
+            return array(
+                "apiStatus" => array(
+                    "code" => $statusCode,
+                    "message" => $statusMessage,
+                ),
+            );
+        } catch (Exception $e) {
+            throw new Exception($e->getMessage());
+        }
+    }
+
+    public function Groupdeactiveachieve($data, $loginData)
+    {
+        try {
+            // Step 1: Validate input
+            if (!isset($data['id']) || empty($data['id'])) {
+                throw new Exception("Bad request. 'id' field is required.");
+            }
+
+            // Normalize to array and sanitize IDs
+            $ids = is_array($data['id']) ? $data['id'] : [$data['id']];
+            $ids = array_map('intval', $ids);
+
+            $db = $this->dbConnect();
+            $idList = implode(',', $ids);
+
+            // Step 2: Check if group contact IDs exist AND are active
+            $checkQuery = "SELECT id FROM cmp_group_contact WHERE id IN ($idList) AND active_status = 1 AND status = 1";
+            $result = $db->query($checkQuery);
+
+            $foundIds = [];
+            while ($row = $result->fetch_assoc()) {
+                $foundIds[] = $row['id'];
+            }
+
+            // Step 3: If any ID is missing or inactive, return error
+            $missingIds = array_diff($ids, $foundIds);
+            if (!empty($missingIds)) {
+                $db->close();
+                return array(
+                    "apiStatus" => array(
+                        "code" => "400",
+                        "message" => "These group contact IDs do not exist or are already deactivated: " . implode(', ', $missingIds),
+                    ),
+                );
+            }
+
+            // Step 4: Deactivate valid group contacts
+            $deactivateQuery = "UPDATE cmp_group_contact SET active_status = 0 WHERE id IN ($idList) AND status = 1";
+            if ($db->query($deactivateQuery) === true) {
+                $statusCode = "200";
+                $statusMessage = "Group contact(s) deactivated successfully.";
+            } else {
+                $statusCode = "500";
+                $statusMessage = "Unable to deactivate group contact(s), please try again later.";
+            }
+
+            $db->close();
+
+            return array(
+                "apiStatus" => array(
+                    "code" => $statusCode,
+                    "message" => $statusMessage,
+                ),
+            );
+        } catch (Exception $e) {
+            throw new Exception($e->getMessage());
+        }
+    }
+    //Group active and deactive
     public function Groupactive($data, $loginData)
     {
         try {
@@ -763,6 +979,7 @@ private function selecteddataDelete($data, $loginData)
             throw new Exception($e->getMessage());
         }
     }
+    
     public function Groupdeactive($data, $loginData)
     {
         try {
@@ -812,185 +1029,6 @@ private function selecteddataDelete($data, $loginData)
         }
     }
 
-    // public function importStoreFromExcel($data, $loginData)
-    // {
-    //     $resultArray = [];
-    //     try {
-    //         $db = $this->dbConnect();
-
-    //         // Validate file upload
-    //         if (!isset($_FILES['file']) || $_FILES['file']['error'] != UPLOAD_ERR_OK) {
-    //             throw new Exception("No valid file uploaded.");
-    //         }
-
-    //         $file = $_FILES['file'];
-    //         $filePath = $file['tmp_name'];
-    //         $fileType = $file['type'];
-    //         $fileSize = $file['size'];
-
-    //         // Allowed file types
-    //         $allowedTypes = [
-    //             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // XLSX
-    //             'application/vnd.ms-excel' // XLS
-    //         ];
-
-    //         if (!in_array($fileType, $allowedTypes)) {
-    //             throw new Exception("Invalid file type. Please upload an Excel file.");
-    //         }
-
-    //         // Check file size (Max: 5MB)
-    //         if ($fileSize > 5 * 1024 * 1024) {
-    //             throw new Exception("File size exceeds 5MB limit.");
-    //         }
-
-    //         // Read Excel file
-    //         $spreadsheet = IOFactory::load($filePath);
-    //         $sheet = $spreadsheet->getActiveSheet();
-    //         $rows = $sheet->toArray(null, true, true, true);
-
-    //         if (empty($rows) || count($rows) < 2) {
-    //             throw new Exception("Excel file is empty or invalid format.");
-    //         }
-
-    //         unset($rows[1]); // Remove header row
-
-    //         // Get the Vendor ID from the login data
-    //         $user_id = $loginData['user_id'];
-    //         $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
-    //         $result = $db->query($sql);
-
-    //         if (!$result || $result->num_rows === 0) {
-    //             throw new Exception("Vendor ID not found for user ID: $user_id");
-    //         }
-
-    //         $vendorRow = $result->fetch_assoc();
-    //         $vendor_id = $vendorRow['vendor_id'];
-    //         $uid = bin2hex(random_bytes(8));
-    //         // Process Excel Rows
-    //         foreach ($rows as $row) {
-    //             $storeName = trim($row['B']);
-    //             $address   = trim($row['C']);
-    //             $phone     = trim($row['D']);
-    //             $email     = trim($row['E']);
-
-    //             if (empty($storeName) || empty($address) || empty($phone) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    //                 throw new Exception("Invalid data found in row: " . json_encode($row));
-    //             }
-
-    //             // Check if Store Exists
-    //             $storeQuery = "SELECT id FROM cmp_store WHERE store_name = '$storeName' LIMIT 1";
-    //             $storeResult = $db->query($storeQuery);
-
-    //             if ($storeResult->num_rows > 0) {
-    //                 $storeRow = $storeResult->fetch_assoc();
-    //                 $store_id = $storeRow['id'];
-    //             } else {
-
-    //                 // Insert Store into cmp_store
-    //                 $insertStoreQuery = "INSERT INTO cmp_store (uid,store_name, address, phone, email, created_by, status) 
-    //                                      VALUES (' $uid ','$storeName', '$address', '$phone', '$email', '$user_id', 1)";
-    //                 if (!$db->query($insertStoreQuery)) {
-    //                     throw new Exception("Error inserting Group: " . $db->error);
-    //                 }
-    //                 $store_id = $db->insert_id;
-    //             }
-
-    //             // Check if Store is Already Mapped to Vendor
-    //             $mappingQuery = "SELECT id FROM cmp_vendor_store_mapping WHERE vendor_id = '$vendor_id' AND store_id = '$store_id' LIMIT 1";
-    //             $mappingResult = $db->query($mappingQuery);
-
-    //             if ($mappingResult->num_rows === 0) {
-    //                 // Insert Mapping into cmp_vendor_store_mapping
-    //                 $insertMappingQuery = "INSERT INTO cmp_vendor_store_mapping (vendor_id, store_id) VALUES ('$vendor_id', '$store_id')";
-    //                 if (!$db->query($insertMappingQuery)) {
-    //                     throw new Exception("Error mapping Group to vendor: " . $db->error);
-    //                 }
-    //             }
-    //         }
-
-    //         return ["apiStatus" => ["code" => "200", "message" => "Excel file uploaded and processed successfully."]];
-    //     } catch (Exception $e) {
-    //         return ["apiStatus" => ["code" => "401", "message" => $e->getMessage()]];
-    //     }
-    // }
-
-    //export the data to excel 
-    // public function exportStoreToExcel($data, $loginData)
-    // {
-
-    //     try {
-    //         $db = $this->dbConnect();
-    //         $spreadsheet = new Spreadsheet();
-    //         $sheet = $spreadsheet->getActiveSheet();
-
-    //         //Get the Contact id from the login data
-    //         $user_id = $loginData['user_id'];
-    //         $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
-    //         $result = $db->query($sql);
-
-    //         if ($result) {
-    //             $row = $result->fetch_assoc();
-    //             if (!$row || !isset($row['vendor_id'])) {
-    //                 throw new Exception("Vendor ID not found for user ID: $user_id");
-    //             }
-    //             $vendor_id = $row['vendor_id'];
-    //         } else {
-    //             throw new Exception("Database query failed: " . $db->error);
-    //         }
-    //         // Set column headers
-    //         $headers = ['S.No',  'Store Name', 'Address',  'Phone', 'Email'];
-    //         $column = 'A';
-    //         foreach ($headers as $header) {
-    //             $sheet->setCellValue($column . '1', $header);
-    //             $sheet->getStyle($column . '1')->getFont()->setBold(true); // Make text bold
-    //             $sheet->getStyle($column . '1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER); // Center align
-    //             $sheet->getColumnDimension($column)->setAutoSize(true); // Auto-adjust column width
-    //             $column++;
-    //         }
-    //         // Fetch staff details
-    //         $query = "SELECT*
-    //          FROM cmp_store c 
-    //               WHERE status = 1  AND created_by='" . $loginData['user_id'] . "'";
-    //         // print_r($query);exit;
-    //         $result = $db->query($query);
-
-    //         if ($result->num_rows === 0) {
-    //             throw new Exception("No Contact data found.");
-    //         }
-
-    //         $rowIndex = 2; // Start from row 2 (row 1 is headers)
-    //         $sno = 1; // Initialize serial number
-    //         while ($row = $result->fetch_assoc()) {
-    //             $column = 'A';
-    //             $sheet->setCellValue($column++ . $rowIndex, $sno++);
-    //             $sheet->setCellValue($column++ . $rowIndex, $row['store_name']);
-    //             $sheet->setCellValue($column++ . $rowIndex, $row['address']);
-    //             $sheet->setCellValue($column++ . $rowIndex, $row['phone']);
-    //             $sheet->setCellValue($column++ . $rowIndex, $row['email']);
-    //             $sheet->getStyle('A' . $rowIndex . ':' . $column . $rowIndex)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER); // Center align
-    //             $rowIndex++;
-    //         }
-
-    //          // **Output the file directly for download**
-    //     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    //     header('Content-Disposition: attachment; filename="Staff_Data_' . date('Ymd_His') . '.xlsx"');
-    //     header('Cache-Control: max-age=0');
-
-    //     $writer = new Xlsx($spreadsheet);
-    //     $writer->save('php://output'); // Send file to browser directly
-
-    //     exit; 
-
-    //     } catch (Exception $e) {
-    //         return [
-    //             "apiStatus" => [
-    //                 "code" => "401",
-    //                 "message" => $e->getMessage()
-    //             ]
-    //         ];
-    //     }
-    // }
-
 
 
     /**
@@ -1037,7 +1075,30 @@ private function selecteddataDelete($data, $loginData)
             $vendor_id = $this->getVendorIdByUserId($loginData);
             $sql = "SELECT COUNT(cs.id) as totalgroup
         FROM cmp_group_contact cs
-               WHERE cs.status = 1 AND vendor_id = $vendor_id";
+               WHERE cs.status = 1 AND active_status=1 AND vendor_id = $vendor_id";
+
+            // print_r($sql);exit; 
+            $result = $db->query($sql);
+            $row = $result->fetch_assoc();
+
+            return $row['totalgroup'];
+        } catch (Exception $e) {
+            return array(
+                "result" => "401",
+                "message" => $e->getMessage(),
+            );
+        }
+    }
+    private function getArchiveTotalCount($loginData)
+    {
+
+        try {
+            $db = $this->dbConnect();
+            // get the vendor id from the login data
+            $vendor_id = $this->getVendorIdByUserId($loginData);
+            $sql = "SELECT COUNT(cs.id) as totalgroup
+        FROM cmp_group_contact cs
+               WHERE cs.status = 1 AND active_status=0 AND vendor_id = $vendor_id";
 
             // print_r($sql);exit; 
             $result = $db->query($sql);
@@ -1098,6 +1159,88 @@ private function selecteddataDelete($data, $loginData)
             );
         }
     }
+
+    //group delete in multiple
+
+    private function selecteddatagroupDelete($data, $loginData)
+    {
+        try {
+            $ids = $data['deleteId'];
+
+            // print_r($data);exit;
+            // Check if IDs are provided and valid
+            if (empty($ids) || !is_array($ids)) {
+                throw new Exception("Invalid input. Please provide an array of IDs.");
+            }
+
+            $db = $this->dbConnect();
+            $deleted = [];
+            $failed = [];
+
+            foreach ($ids as $id) {
+                // Validate ID
+                if (!is_numeric($id)) {
+                    $failed[] = [
+                        'id' => $id,
+                        'status' => 400,
+                        'message' => 'Invalid ID format'
+                    ];
+                    continue;
+                }
+
+                // Check if the ID exists and is active
+                $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact WHERE id = $id AND status=1 AND created_by ='" . $loginData['user_id'] . "'";
+                $result = $db->query($checkIdQuery);
+                $rowCount = $result->fetch_assoc()['count'];
+
+                if ($rowCount == 0) {
+                    $failed[] = [
+                        'id' => $id,
+                        'status' => 400,
+                        'message' => 'Group does not exist or is already deleted'
+                    ];
+                    continue;
+                }
+
+                // Update delete query to set status to 0
+                $deleteQuery = "UPDATE cmp_group_contact SET status = 0 , active_status= 0 WHERE id = $id ";
+                if ($db->query($deleteQuery) === true) {
+                    $deleted[] = [
+                        'id' => $id,
+                        'status' => 200,
+                        'message' => 'Group details deleted successfully'
+                    ];
+                } else {
+                    $failed[] = [
+                        'id' => $id,
+                        'status' => 500,
+                        'message' => 'Unable to delete Group details, please try again later'
+                    ];
+                }
+            }
+
+            $db->close();
+
+            return [
+                'apiStatus' => [
+                    'code' => count($failed) > 0 ? 400 : 200,
+                    'message' => count($failed) > 0 ? 'Some deletions failed' : 'All deletions successful'
+                ],
+                'deleted' => $deleted,
+                'failed' => $failed
+            ];
+        } catch (Exception $e) {
+            return [
+                'apiStatus' => [
+                    'code' => 500,
+                    'message' => $e->getMessage()
+                ]
+            ];
+        }
+    }
+
+
+
     public function getpayloadstructure($data, $loginData)
     {
         // Initialize result array

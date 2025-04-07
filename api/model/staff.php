@@ -30,8 +30,12 @@ class STAFFMODEL extends APIRESPONSE
                     return $result;
                 } elseif ($urlParam[1] == "staffdeactive") {
                     $result = $this->userdeactive($data, $loginData);
+                    return $result;
                 } elseif ($urlParam[1] === 'exportstafftoexcel') {
                     $result = $this->exportStaffToExcel($data, $loginData);
+                    return $result;
+                } elseif ($urlParam[1] === 'isheader') {
+                    $result = $this->isheaderonly($data, $loginData);
                     return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
@@ -971,7 +975,48 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
             ];
         }
     }
-    
+    public function isheaderonly($data, $loginData)
+    {
+        try {
+
+            $db = $this->dbConnect();
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+
+            // Set column headers
+            $headers = ['S.No', 'First Name', 'Last Name', 'Username', 'Email', 'Mobile', 'Store Name'];
+            $column = 'A';
+            foreach ($headers as $header) {
+                $sheet->setCellValue($column . '1', $header);
+                $sheet->getStyle($column . '1')->getFont()->setBold(true);
+                $sheet->getStyle($column . '1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getColumnDimension($column)->setAutoSize(true);
+                $column++;
+            }
+
+            // Clear output buffering just in case
+            // if (ob_get_contents()) ob_end_clean();
+
+
+            // Output the file directly for download
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="Staff_Data_' . date('Ymd_His') . '.xlsx"');
+            header('Cache-Control: max-age=0');
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output'); // Send file to browser directly
+
+            exit;
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "500",
+                    "message" => $e->getMessage()
+                ]
+            ];
+        }
+    }
+
 
     private function deleteStaff($data)
     {
@@ -1044,17 +1089,15 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
     // //store ative and deactive
     public function useractive($data, $loginData)
     {
-        // print_r($data);exit;
-
         try {
             $id = $data[2];
             $db = $this->dbConnect();
             if (empty($data[2])) {
                 throw new Exception("Bad request");
             }
-            $user_id = $loginData['user_id'];
+
             $db = $this->dbConnect();
-            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_users WHERE id = $id AND status=1";
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_store WHERE id = $id AND status=1";
 
             $result = $db->query($checkIdQuery);
             $rowCount = $result->fetch_assoc()['count'];
@@ -1069,15 +1112,15 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
                     ),
                 );
             }
-            $ActiveQuery = "UPDATE cmp_users SET active_status = 1 WHERE status = 1 AND id = $id AND active_status = 0";
+            $ActiveQuery = "UPDATE cmp_store SET active_status = 1 WHERE status = 1 AND id = $id";
 
             if ($db->query($ActiveQuery) === true) {
                 $db->close();
                 $statusCode = "200";
-                $statusMessage = "User activated successfully.";
+                $statusMessage = "Store activated successfully.";
             } else {
                 $statusCode = "500";
-                $statusMessage = "Unable to activate User, please try again later.";
+                $statusMessage = "Unable to activate Store, please try again later.";
             }
             $resultArray = array(
                 "apiStatus" => array(
@@ -1099,7 +1142,7 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
                 throw new Exception("Bad request");
             }
             $db = $this->dbConnect();
-            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_users WHERE id = $id AND active_status=1 AND status=1";
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_store WHERE id = $id AND active_status=1 AND status=1";
             // print_r($checkIdQuery);exit;
 
             $result = $db->query($checkIdQuery);
@@ -1117,15 +1160,15 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
                     ),
                 );
             }
-            $deactiveQuery = "UPDATE cmp_users SET active_status = 0 WHERE status = 1 AND id = $id";
+            $deactiveQuery = "UPDATE cmp_store SET active_status = 0 WHERE status = 1 AND id = $id";
 
             if ($db->query($deactiveQuery) === true) {
                 $db->close();
                 $statusCode = "200";
-                $statusMessage = "User Deactivated successfully.";
+                $statusMessage = "Store Deactivated successfully.";
             } else {
                 $statusCode = "500";
-                $statusMessage = "Unable to Deactivate User, please try again later.";
+                $statusMessage = "Unable to Deactivate Store, please try again later.";
             }
             $resultArray = array(
                 "apiStatus" => array(

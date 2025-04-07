@@ -689,15 +689,35 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                 ));
 
                 $response = curl_exec($curl);
-                // echo $response;
+                $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
                 curl_close($curl);
                 $firstResponse = json_decode($response, true);
 
                 // After uploading, get the media ID from the upload media
                 $mediaData = $this->uploadMediaGetID($loginData, $file);
+                // print_r(json_encode($mediaData));exit;
                 if (isset($mediaData)) {
                     $mergedResponse = array_merge($firstResponse, $mediaData);
-                    echo json_encode($mergedResponse, JSON_PRETTY_PRINT);
+                    // print_r(json_encode($mergedResponse));exit;
+                    if ($mediaData['id']) {
+                        return array(
+                            "apiStatus" => array(
+                                "code" => "200",
+                                "message" => "Media uploaded successfully",
+                            ),
+                            "result" => ($mergedResponse)
+                        );
+                    } else {
+                        // echo "just ecjo";
+                        return array(
+                            "apiStatus" => array(
+                                "code" => "401",
+                                "message" => "Media upload error, Try again!",
+                            ),
+                            "result" => ($mergedResponse)
+                        );
+                    }
+                    // echo json_encode($mergedResponse, JSON_PRETTY_PRINT);
                 }    
                 exit;
             }
@@ -742,10 +762,10 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
         ));
         // echo $this->fb_auth_token;exit;
         $response = curl_exec($curl);
-        // print_r($response);exit;
         curl_close($curl);
 
         $responseDecoded = json_decode($response, true);
+        // print_r($responseDecoded);exit;
         // Return the response from media upload to extract the media ID
         return $responseDecoded;
 
@@ -852,7 +872,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                 // Prepare dynamic components based on the template and the contact data
                 // print_r(json_encode($data['variableIds']));
                 $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'],$template['media_id']);
-                print_r(json_encode($dynamicComponents, true));
+                // print_r(json_encode($dynamicComponents, true));
                 // Build the message body
                 $body = [
                     'messaging_product' => 'whatsapp',

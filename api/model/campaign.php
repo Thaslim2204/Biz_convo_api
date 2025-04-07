@@ -16,21 +16,24 @@ class CAMPAIGNMODEL extends APIRESPONSE
                 $urlParam = explode('/', $urlPath);
                 if ($urlParam[1] == "get") {
                     $result = $this->getcampaign($data, $loginData);
-                    } elseif ($urlParam[1] === 'dashboard') {
-                        // if ($urlParam[2] === 'active') {
-                        //     $result = $this->getDashboardactive($data, $loginData);
-                        //     return $result;
-                        // } elseif ($urlParam[2] === 'deactive') {
-                        //     // $result = $this->getDashboarddeactive($data, $loginData);
-                        //     // return $result;
-                        // }else{
-                        //     throw new Exception("Unable to proceed your request!");
-                        // }
+                } elseif ($urlParam[1] === 'dashboard') {
+                    // if ($urlParam[2] === 'active') {
+                    //     $result = $this->getDashboardactive($data, $loginData);
+                    //     return $result;
+                    // } elseif ($urlParam[2] === 'deactive') {
+                    //     // $result = $this->getDashboarddeactive($data, $loginData);
+                    //     // return $result;
+                    // }else{
+                    //     throw new Exception("Unable to proceed your request!");
+                    // }                } elseif ($urlParam[1] == "active") {
+                    $result = $this->campaignactive($data, $loginData);
+                    return $result;
                 } elseif ($urlParam[1] == "active") {
                     $result = $this->campaignactive($data, $loginData);
                     return $result;
                 } elseif ($urlParam[1] == "deactive") {
                     $result = $this->campaigndeactive($data, $loginData);
+                    return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -49,7 +52,17 @@ class CAMPAIGNMODEL extends APIRESPONSE
                     }
                     $result = $this->getCampaignDetails($data, $loginData);
                     return $result;
-
+                } else if ($urlParam[1] === 'archive') {
+                    if ($urlParam[2] === 'list') {
+                        $result = $this->getCampaignArchiveDetails($data, $loginData);
+                        return $result;
+                    }
+                } elseif ($urlParam[1] == "activeachieve") {
+                    $result = $this->campaignactiveachieve($data, $loginData);
+                    return $result;
+                } elseif ($urlParam[1] == "deactiveachieve") {
+                    $result = $this->campaigndeactiveachieve($data, $loginData);
+                    return $result;
                     // } elseif ($urlParam[1] === 'payloadStructure') {
                     //     // print_r($data);exit;
                     //     $result = $this->getpayloadstructure($data, $loginData);
@@ -75,7 +88,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
                 $urlPath = $_GET['url'];
                 $urlParam = explode('/', $urlPath);
                 if ($urlParam[1] == "delete") {
-                    $result = $this->deleteGroup($data);
+                    $result = $this->deletecampaign($data);
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -277,159 +290,159 @@ class CAMPAIGNMODEL extends APIRESPONSE
      * @return multitype:string
      */
     public function createCampaign($data, $loginData)
-{
-    $resultArray = array();
-    try {
-        $db = $this->dbConnect();
+    {
+        $resultArray = array();
+        try {
+            $db = $this->dbConnect();
 
-        // Validate input details
-        $validationData = array(
-            "templateId"    => $data['templateId'],
-            "groupId"       => $data['group']['groupId'],
-            "campaignTitle" => $data['title'],
-        );
-        $this->validateInputDetails($validationData);
+            // Validate input details
+            $validationData = array(
+                "templateId"    => $data['templateId'],
+                "groupId"       => $data['group']['groupId'],
+                "campaignTitle" => $data['title'],
+            );
+            $this->validateInputDetails($validationData);
 
-        // Fetch Template ID
-        $templateId = mysqli_real_escape_string($db, $data['templateId']);
-        $sql = "SELECT id FROM cmp_whatsapp_templates WHERE template_id = '$templateId' AND status = 1";
-        $result = mysqli_query($db, $sql);
+            // Fetch Template ID
+            $templateId = mysqli_real_escape_string($db, $data['templateId']);
+            $sql = "SELECT id FROM cmp_whatsapp_templates WHERE template_id = '$templateId' AND status = 1";
+            $result = mysqli_query($db, $sql);
 
-        if (!$result || mysqli_num_rows($result) == 0) {
-            throw new Exception("Template ID not found");
-        }
-        $row = mysqli_fetch_assoc($result);
-        $template_id = $row['id'];
+            if (!$result || mysqli_num_rows($result) == 0) {
+                throw new Exception("Template ID not found");
+            }
+            $row = mysqli_fetch_assoc($result);
+            $template_id = $row['id'];
 
-        // Fetch Group Details
-        $groupId =  $data['group']['groupId'];
-        $groupName =  $data['group']['groupName'];
+            // Fetch Group Details
+            $groupId =  $data['group']['groupId'];
+            $groupName =  $data['group']['groupName'];
 
-        $sql = "SELECT COUNT(*) as count FROM cmp_group_contact WHERE id = '$groupId' AND group_name = '$groupName' AND status = 1";
-        $result = mysqli_query($db, $sql);
-        $row = mysqli_fetch_assoc($result);
+            $sql = "SELECT COUNT(*) as count FROM cmp_group_contact WHERE id = '$groupId' AND group_name = '$groupName' AND status = 1";
+            $result = mysqli_query($db, $sql);
+            $row = mysqli_fetch_assoc($result);
 
-        if ($row['count'] == 0) {
-            $db->close();
-            return [
-                "apiStatus" => [
-                    "code"    => "400",
-                    "message" => "Group does not exist",
-                ],
-            ];
-        }
+            if ($row['count'] == 0) {
+                $db->close();
+                return [
+                    "apiStatus" => [
+                        "code"    => "400",
+                        "message" => "Group does not exist",
+                    ],
+                ];
+            }
 
-        // Fetch Timezone details
-        $timezone_zoneName = mysqli_real_escape_string($db, $data['timezone']['zoneName']);
-        $timezone_id = mysqli_real_escape_string($db, $data['timezone']['id']);
-    // Check if timezone exists in cmp_mst_timezone
+            // Fetch Timezone details
+            $timezone_zoneName = mysqli_real_escape_string($db, $data['timezone']['zoneName']);
+            $timezone_id = mysqli_real_escape_string($db, $data['timezone']['id']);
+            // Check if timezone exists in cmp_mst_timezone
             $checkTimezoneQuery = "SELECT COUNT(*)
             as count FROM cmp_mst_timezone WHERE id = '$timezone_id' AND timezone_name = '$timezone_zoneName'";
             $result = $db->query($checkTimezoneQuery);
             $row = $result->fetch_assoc();
 
             if ($row['count'] == 0) {
-                throw new Exception("Invalid timezone ID or zone name.");
+                // throw new Exception("Invalid timezone ID or zone name.");
             }
 
-       // Validate Variables
-foreach ($data['variableIds'] as $variable) {
-    // Validate Header Variables
-    if ($variable['type'] === 'header') {
-        foreach ($variable['variables'] as $var) {
-            $varValueId = mysqli_real_escape_string($db, $var['varValue']['varTypeId']);
-            $varValueName = mysqli_real_escape_string($db, $var['varValue']['varTypeName']);
+            // Validate Variables
+            foreach ($data['variableIds'] as $variable) {
+                // Validate Header Variables
+                if ($variable['type'] === 'header') {
+                    foreach ($variable['variables'] as $var) {
+                        $varValueId = mysqli_real_escape_string($db, $var['varValue']['varTypeId']);
+                        $varValueName = mysqli_real_escape_string($db, $var['varValue']['varTypeName']);
 
-            $sql = "SELECT COUNT(*) as count FROM cmp_mst_variable WHERE id = '$varValueId' AND variable_name = '$varValueName'";
-            $result = mysqli_query($db, $sql);
-            if (!$result || mysqli_fetch_assoc($result)['count'] == 0) {
-                throw new Exception("Invalid header variable ID or variable name.");
-            }
-        }
-    }
+                        $sql = "SELECT COUNT(*) as count FROM cmp_mst_variable WHERE id = '$varValueId' AND variable_name = '$varValueName'";
+                        $result = mysqli_query($db, $sql);
+                        if (!$result || mysqli_fetch_assoc($result)['count'] == 0) {
+                            throw new Exception("Invalid header variable ID or variable name.");
+                        }
+                    }
+                }
 
-    // Validate Body Variables
-    if ($variable['type'] === 'body') {
-        foreach ($variable['variables'] as $var) {
-            $varValueId = mysqli_real_escape_string($db, $var['varValue']['varTypeId']);
-            $varValueName = mysqli_real_escape_string($db, $var['varValue']['varTypeName']);
+                // Validate Body Variables
+                if ($variable['type'] === 'body') {
+                    foreach ($variable['variables'] as $var) {
+                        $varValueId = mysqli_real_escape_string($db, $var['varValue']['varTypeId']);
+                        $varValueName = mysqli_real_escape_string($db, $var['varValue']['varTypeName']);
 
-            $sql = "SELECT COUNT(*) as count FROM cmp_mst_variable WHERE id = '$varValueId' AND variable_name = '$varValueName'";
-            $result = mysqli_query($db, $sql);
-            if (!$result || mysqli_fetch_assoc($result)['count'] == 0) {
-                throw new Exception("Invalid body variable ID or variable name.");
-            }
-        }
-    }
-}
-
-
-        // Schedule Time
-        $scheduleAt = !empty($data['scheduleStatus']) && $data['scheduleStatus'] === true
-            ? mysqli_real_escape_string($db, $data['scheduledAt'])
-            : date("Y-m-d H:i:s", strtotime("+4 hours 30 minutes"));
-
-        // Insert Campaign
-        $title = mysqli_real_escape_string($db, $data['title']);
-        $restrictLangCode = mysqli_real_escape_string($db, $data['restrictLangCode']);
-        $sendNum = mysqli_real_escape_string($db, $data['SendNum']);
-        $createdBy = mysqli_real_escape_string($db, $loginData['user_id']);
-
-        $sql = "INSERT INTO cmp_campaign (group_id, template_id, title, restrictLangCode, timezone, schedule_at, send_num, created_by) 
-        VALUES ('$groupId', '$template_id', '$title', '$restrictLangCode', '$timezone_zoneName', '$scheduleAt', '$sendNum', '$createdBy')";
-
-        if (!mysqli_query($db, $sql)) {
-            throw new Exception("Error inserting campaign: " . mysqli_error($db));
-        }
-        $campaign_id = mysqli_insert_id($db);
-
-        // Send WhatsApp Message
-        $call = new WHATSAPPTEMPLATEMODEL();
-        $call->sendMessage($data, $loginData, $campaign_id);
-
-        foreach ($data['variableIds'] as $variable) {
-            if (isset($variable['type'])) {
-                $type = mysqli_real_escape_string($db, $variable['type']); // Prevent SQL injection
-        
-                foreach ($variable['variables'] as $var) {
-                    $vartypeId = mysqli_real_escape_string($db, $var['varName']);
-                    $varValueId = mysqli_real_escape_string($db, $var['varValue']['varTypeId']);
-                    $varValueName = mysqli_real_escape_string($db, $var['varValue']['varTypeName']);
-        
-                    $sqlW = "INSERT INTO cmp_campaign_variable_mapping (campaign_id, template_id, type, variable_type_id, variable_value, group_id, created_by) 
-                             VALUES ('$campaign_id', '$template_id', '$type', '$vartypeId', '$varValueId', '$groupId', '$createdBy')";
-        
-                    if (!mysqli_query($db, $sqlW)) {
-                        die("Error inserting variable mapping: " . mysqli_error($db));
+                        $sql = "SELECT COUNT(*) as count FROM cmp_mst_variable WHERE id = '$varValueId' AND variable_name = '$varValueName'";
+                        $result = mysqli_query($db, $sql);
+                        if (!$result || mysqli_fetch_assoc($result)['count'] == 0) {
+                            throw new Exception("Invalid body variable ID or variable name.");
+                        }
                     }
                 }
             }
-        }
-        
-        
-        // print_r($sqlW);exit;
 
-        $db->close();
-        return [
-            "apiStatus" => [
-                "code"    => "200",
-                "message" => "Campaign successfully created.",
-            ],
-        ];
-    } catch (Exception $e) {
-        if (isset($db)) {
+
+            // Schedule Time
+            $scheduleAt = !empty($data['scheduleStatus']) && $data['scheduleStatus'] === true
+                ? mysqli_real_escape_string($db, $data['scheduledAt'])
+                : date("Y-m-d H:i:s", strtotime("+4 hours 30 minutes"));
+
+            // Insert Campaign
+            $title = mysqli_real_escape_string($db, $data['title']);
+            $restrictLangCode = mysqli_real_escape_string($db, $data['restrictLangCode']);
+            $sendNum = mysqli_real_escape_string($db, $data['SendNum']);
+            $createdBy = mysqli_real_escape_string($db, $loginData['user_id']);
+
+            $sql = "INSERT INTO cmp_campaign (group_id, template_id, title, restrictLangCode, timezone, schedule_at, send_num, created_by) 
+        VALUES ('$groupId', '$template_id', '$title', '$restrictLangCode', '$timezone_zoneName', '$scheduleAt', '$sendNum', '$createdBy')";
+
+            if (!mysqli_query($db, $sql)) {
+                throw new Exception("Error inserting campaign: " . mysqli_error($db));
+            }
+            $campaign_id = mysqli_insert_id($db);
+
+            // Send WhatsApp Message
+            $call = new WHATSAPPTEMPLATEMODEL();
+            $call->sendMessage($data, $loginData, $campaign_id);
+
+            foreach ($data['variableIds'] as $variable) {
+                if (isset($variable['type'])) {
+                    $type = mysqli_real_escape_string($db, $variable['type']); // Prevent SQL injection
+
+                    foreach ($variable['variables'] as $var) {
+                        $vartypeId = mysqli_real_escape_string($db, $var['varName']);
+                        $varValueId = mysqli_real_escape_string($db, $var['varValue']['varTypeId']);
+                        $varValueName = mysqli_real_escape_string($db, $var['varValue']['varTypeName']);
+
+                        $sqlW = "INSERT INTO cmp_campaign_variable_mapping (campaign_id, template_id, type, variable_type_id, variable_value, group_id, created_by) 
+                             VALUES ('$campaign_id', '$template_id', '$type', '$vartypeId', '$varValueId', '$groupId', '$createdBy')";
+
+                        if (!mysqli_query($db, $sqlW)) {
+                            die("Error inserting variable mapping: " . mysqli_error($db));
+                        }
+                    }
+                }
+            }
+
+
+            // print_r($sqlW);exit;
+
             $db->close();
+            return [
+                "apiStatus" => [
+                    "code"    => "200",
+                    "message" => "Campaign successfully created.",
+                ],
+            ];
+        } catch (Exception $e) {
+            if (isset($db)) {
+                $db->close();
+            }
+            return [
+                "apiStatus" => [
+                    "code"    => "401",
+                    "message" => $e->getMessage(),
+                ],
+            ];
         }
-        return [
-            "apiStatus" => [
-                "code"    => "401",
-                "message" => $e->getMessage(),
-            ],
-        ];
     }
-}
 
-    
+
 
 
 
@@ -470,11 +483,11 @@ foreach ($data['variableIds'] as $variable) {
             WHERE c.id='" . $data['templateId'] . "' 
             AND c.status = 1 
             AND wt.status = 1 
-            AND c.active_status = 1 
+           
             AND c.created_by = '" . $loginData['user_id'] . "' 
             AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
             ORDER BY c.id DESC";
-// print_r($queryService);exit;
+            // print_r($queryService);exit;
             $result = $db->query($queryService);
             $row_cnt = mysqli_num_rows($result);
 
@@ -534,60 +547,60 @@ foreach ($data['variableIds'] as $variable) {
 
 
 
-    private function deleteGroup($data)
+    private function deletecampaign($data)
     {
-        // try {
+        try {
+            // print_r($data);exit;
+            $id = $data[2];
+            $db = $this->dbConnect();
+            // Check if the ID is provided and valid
+            if (empty($data[2])) {
+                throw new Exception("Invalid. Please enter your ID.");
+            }
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_campaign WHERE id = $id AND status=1";
+            // print_r($checkIdQuery);exit;
+            $result = $db->query($checkIdQuery);
+            $rowCount = $result->fetch_assoc()['count'];
 
-        //     $id = $data[2];
-        //     $db = $this->dbConnect();
-        //     // Check if the ID is provided and valid
-        //     if (empty($data[2])) {
-        //         throw new Exception("Invalid. Please enter your ID.");
-        //     }
-        //     $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact WHERE id = $id AND status=1";
-        //     // print_r($checkIdQuery);exit;
-        //     $result = $db->query($checkIdQuery);
-        //     $rowCount = $result->fetch_assoc()['count'];
+            // If ID doesn't exist, return error
+            if ($rowCount == 0) {
+                $db->close();
+                return array(
+                    "apiStatus" => array(
+                        "code" => "400",
+                        "message" => "Campaign does not exist",
+                    ),
+                );
+            }
 
-        //     // If ID doesn't exist, return error
-        //     if ($rowCount == 0) {
-        //         $db->close();
-        //         return array(
-        //             "apiStatus" => array(
-        //                 "code" => "400",
-        //                 "message" => "Group does not exist",
-        //             ),
-        //         );
-        //     }
+            //update delete query
 
-        //     //update delete query
+            $deleteQuery = "UPDATE cmp_campaign
+            SET status = 0 
+            WHERE id = " . $id . "";
 
-        //     $deleteQuery = "UPDATE cmp_group_contact
-        //     SET status = 0 
-        //     WHERE id = " . $id . "";
+            // print_r($deleteQuery);exit;
 
-        //     // print_r($deleteQuery);exit;
-
-        //     if ($db->query($deleteQuery) === true) {
-        //         $db->close();
-        //         $statusCode = "200";
-        //         $statusMessage = "Group details deleted successfully";
-        //     } else {
-        //         $statusCode = "500";
-        //         $statusMessage = "Unable to delete Group details, please try again later";
-        //     }
-        //     $resultArray = array(
-        //         "apiStatus" => array(
-        //             "code" => $statusCode,
-        //             "message" => $statusMessage,
-        //         ),
-        //     );
-        //     return $resultArray;
-        // } catch (Exception $e) {
-        //     throw new Exception($e->getMessage());
-        // }
+            if ($db->query($deleteQuery) === true) {
+                $db->close();
+                $statusCode = "200";
+                $statusMessage = "Campaign details deleted successfully";
+            } else {
+                $statusCode = "500";
+                $statusMessage = "Unable to delete Campaign details, please try again later";
+            }
+            $resultArray = array(
+                "apiStatus" => array(
+                    "code" => $statusCode,
+                    "message" => $statusMessage,
+                ),
+            );
+            return $resultArray;
+        } catch (Exception $e) {
+            throw new Exception($e->getMessage());
+        }
     }
-    //Group ative and deactive
+
     public function campaignactive($data, $loginData)
     {
         try {
@@ -630,6 +643,65 @@ foreach ($data['variableIds'] as $variable) {
                 ),
             );
             return $resultArray;
+        } catch (Exception $e) {
+            throw new Exception($e->getMessage());
+        }
+    }
+    //Group ative and deactive
+    public function campaignactiveachieve($data, $loginData)
+    {
+        try {
+            // Validate 'id' key
+            if (!isset($data['id']) || empty($data['id'])) {
+                throw new Exception("Bad request. 'id' field is required.");
+            }
+
+            // Normalize to array
+            $ids = is_array($data['id']) ? $data['id'] : [$data['id']];
+            $ids = array_map('intval', $ids); // Sanitize IDs
+
+            $db = $this->dbConnect();
+            $idList = implode(',', $ids);
+
+            // Step 1: Check if all campaign IDs exist (status = 1)
+            $checkQuery = "SELECT id FROM cmp_campaign WHERE id IN ($idList) AND status = 1";
+            $result = $db->query($checkQuery);
+
+            $foundIds = [];
+            while ($row = $result->fetch_assoc()) {
+                $foundIds[] = $row['id'];
+            }
+
+            $missingIds = array_diff($ids, $foundIds);
+
+            if (!empty($missingIds)) {
+                $db->close();
+                return array(
+                    "apiStatus" => array(
+                        "code" => "400",
+                        "message" => "These campaign IDs do not exist or are inactive: " . implode(', ', $missingIds),
+                    ),
+                );
+            }
+
+            // Step 2: Activate all valid campaigns
+            $activateQuery = "UPDATE cmp_campaign SET active_status = 1 WHERE id IN ($idList) AND status = 1";
+            if ($db->query($activateQuery) === true) {
+                $statusCode = "200";
+                $statusMessage = "Campaign(s) activated successfully.";
+            } else {
+                $statusCode = "500";
+                $statusMessage = "Unable to activate campaign(s), please try again.";
+            }
+
+            $db->close();
+
+            return array(
+                "apiStatus" => array(
+                    "code" => $statusCode,
+                    "message" => $statusMessage,
+                ),
+            );
         } catch (Exception $e) {
             throw new Exception($e->getMessage());
         }
@@ -682,6 +754,68 @@ foreach ($data['variableIds'] as $variable) {
             throw new Exception($e->getMessage());
         }
     }
+    public function campaigndeactiveachieve($data, $loginData)
+    {
+        try {
+            // Validate input
+            if (!isset($data['id']) || empty($data['id'])) {
+                throw new Exception("Bad request. 'id' field is required.");
+            }
+
+            $ids = is_array($data['id']) ? $data['id'] : [$data['id']];
+            $ids = array_map('intval', $ids); // Sanitize all IDs
+
+            $db = $this->dbConnect();
+
+            // Convert array to comma-separated string for SQL IN clause
+            $idList = implode(',', $ids);
+
+            // Step 1: Check all IDs exist and are active
+            $checkQuery = "SELECT id FROM cmp_campaign WHERE id IN ($idList) AND active_status = 1 AND status = 1";
+            $result = $db->query($checkQuery);
+
+            $foundIds = [];
+            while ($row = $result->fetch_assoc()) {
+                $foundIds[] = $row['id'];
+            }
+
+            // Find missing or inactive IDs
+            $missingIds = array_diff($ids, $foundIds);
+
+            if (!empty($missingIds)) {
+                $db->close();
+                return array(
+                    "apiStatus" => array(
+                        "code" => "400",
+                        "message" => "These campaign IDs are invalid or already deactivated: " . implode(', ', $missingIds),
+                    ),
+                );
+            }
+
+            // Step 2: All IDs are valid — proceed to deactivate
+            $deactiveQuery = "UPDATE cmp_campaign SET active_status = 0 WHERE id IN ($idList) AND status = 1";
+            if ($db->query($deactiveQuery) === true) {
+                $statusCode = "200";
+                $statusMessage = "Campaign(s) deactivated successfully.";
+            } else {
+                $statusCode = "500";
+                $statusMessage = "Failed to deactivate campaign(s).";
+            }
+
+            $db->close();
+
+            return array(
+                "apiStatus" => array(
+                    "code" => $statusCode,
+                    "message" => $statusMessage,
+                ),
+            );
+        } catch (Exception $e) {
+            throw new Exception($e->getMessage());
+        }
+    }
+
+
 
     // public function importStoreFromExcel($data, $loginData)
     // {
@@ -908,6 +1042,177 @@ foreach ($data['variableIds'] as $variable) {
         }
     }
 
+    public function getCampaignArchiveDetails($data, $loginData)
+    {
+        try {
+            $responseArray = ''; // Initializing response variable
+            $db = $this->dbConnect();
+
+
+            // Check if pageIndex and dataLength are not empty
+            if ($data['pageIndex'] === "") {
+                throw new Exception("PageIndex should not be empty!");
+            }
+            if ($data['dataLength'] == "") {
+                throw new Exception("dataLength should not be empty!");
+            }
+
+            $start_index = $data['pageIndex'] * $data['dataLength'];
+            $end_index = $data['dataLength'];
+            // Get the total record count before applying the LIMIT
+            $countQuery = "SELECT COUNT(*) AS totalCount 
+     FROM cmp_campaign AS c
+     JOIN cmp_whatsapp_templates AS wt ON wt.id = c.template_id
+     WHERE c.status = 1  AND wt.status = 1 AND c.active_status=0
+     AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData);
+
+            $countResult = $db->query($countQuery);
+            $countRow = $countResult->fetch_assoc();
+            $recordCount = $countRow['totalCount']; // Total record count
+
+            // Query to fetch vendors and their contact persons0
+            $queryService = "SELECT c.id,c.title,c.template_id,c.created_date,c.active_status,c.schedule_at,c.status AS campaignStatus,wt.template_name,wt.language
+              FROM cmp_campaign AS c 
+              JOIN cmp_whatsapp_templates AS wt ON wt.id = c.template_id
+              WHERE c.status = 1 AND c.active_status=0 AND wt.status=1 AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
+              ORDER BY id DESC 
+              LIMIT $start_index, $end_index";
+
+            //   print_r($queryService);exit;
+            $result = $db->query($queryService);
+            $row_cnt = mysqli_num_rows($result);
+
+            $group = array(); // Initialize array to hold Store data
+            if ($row_cnt > 0) {
+                while ($row = $result->fetch_assoc()) {
+                    $group[] = array(
+                        "id" => $row['id'],
+                        "title" => $row['title'],
+                        "templateName" => $row['template_name'],
+                        "tempLang" => $row['language'],
+                        "activeStatus" => $row['active_status'],
+                        "createdDate" => $row['created_date'],
+                        "scheduleAt" => $row['schedule_at'],
+                        "status" => $row['campaignStatus']
+                    );
+                }
+            }
+
+            // Construct the final response array
+            $responseArray = array(
+                "pageIndex" => $data['pageIndex'],
+                "dataLength" => $data['dataLength'],
+                "totalRecordCount" => $recordCount,
+                'CampaignDataList' => array_values($group), // Reset array keys
+            );
+
+            // Check if Store data exists
+            if (!empty($group)) {
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "200",
+                        "message" => "Campaign details fetched successfully",
+                    ),
+                    "result" => $responseArray,
+                );
+            } else {
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "404",
+                        "message" => "No data found...",
+                    ),
+                );
+            }
+
+            // Return the result array
+            return $resultArray;
+        } catch (Exception $e) {
+            return array(
+                "apiStatus" => array(
+                    "code" => "500",
+                    "message" => $e->getMessage(),
+                ),
+            );
+        }
+    }
+    //multiple Delete for campaign Id 
+
+    private function selecteddatagroupDelete($data, $loginData)
+    {
+        try {
+            $ids = $data['deleteId'];
+
+            // print_r($data);exit;
+            // Check if IDs are provided and valid
+            if (empty($ids) || !is_array($ids)) {
+                throw new Exception("Invalid input. Please provide an array of IDs.");
+            }
+
+            $db = $this->dbConnect();
+            $deleted = [];
+            $failed = [];
+
+            foreach ($ids as $id) {
+                // Validate ID
+                if (!is_numeric($id)) {
+                    $failed[] = [
+                        'id' => $id,
+                        'status' => 400,
+                        'message' => 'Invalid ID format'
+                    ];
+                    continue;
+                }
+
+                // Check if the ID exists and is active
+                $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact WHERE id = $id AND status=1 AND created_by ='" . $loginData['user_id'] . "'";
+                $result = $db->query($checkIdQuery);
+                $rowCount = $result->fetch_assoc()['count'];
+
+                if ($rowCount == 0) {
+                    $failed[] = [
+                        'id' => $id,
+                        'status' => 400,
+                        'message' => 'Group does not exist or is already deleted'
+                    ];
+                    continue;
+                }
+
+                // Update delete query to set status to 0
+                $deleteQuery = "UPDATE cmp_group_contact SET status = 0 AND active_status= 0 WHERE id = $id ";
+                if ($db->query($deleteQuery) === true) {
+                    $deleted[] = [
+                        'id' => $id,
+                        'status' => 200,
+                        'message' => 'Group details deleted successfully'
+                    ];
+                } else {
+                    $failed[] = [
+                        'id' => $id,
+                        'status' => 500,
+                        'message' => 'Unable to delete Group details, please try again later'
+                    ];
+                }
+            }
+
+            $db->close();
+
+            return [
+                'apiStatus' => [
+                    'code' => count($failed) > 0 ? 400 : 200,
+                    'message' => count($failed) > 0 ? 'Some deletions failed' : 'All deletions successful'
+                ],
+                'deleted' => $deleted,
+                'failed' => $failed
+            ];
+        } catch (Exception $e) {
+            return [
+                'apiStatus' => [
+                    'code' => 500,
+                    'message' => $e->getMessage()
+                ]
+            ];
+        }
+    }
 
     /**
      * Validate function for tenant create

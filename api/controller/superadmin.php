@@ -1,6 +1,6 @@
 <?php
 // Include Deals Model
-require_once "model/superAdmin.php";
+require_once "model/superadmin.php";
 
 class SUPERLOGIN extends SUPERADMINLOGINMODEL
 {
@@ -9,8 +9,8 @@ class SUPERLOGIN extends SUPERADMINLOGINMODEL
         try {
             // Extracting action type from request data
             $endpoint = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
-            
-            if (strpos($endpoint, 'superAdmin/login') !== false) {
+
+            if (strpos($endpoint, 'superadmin/login') !== false) {
                 // Allow login without token
                 $response = $this->processList($data, null);
                 echo $this->json($response);

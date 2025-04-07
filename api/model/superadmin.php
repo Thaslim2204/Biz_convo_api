@@ -72,7 +72,7 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
                 return $result;
 
             default:
-                return $this->handle_error();
+                // return $this->handle_error();
         }
     }
     // Initiate db connection
