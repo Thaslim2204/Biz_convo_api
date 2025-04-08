@@ -2,8 +2,8 @@
 require_once "include/apiResponseGenerator.php";
 require_once "include/dbConnection.php";
 
-define('WHATSAPP_API_URL', 'https://graph.facebook.com/v22.0/556740220861937/messages');
-define('ACCESS_TOKEN', 'YOUR_ACCESS_TOKEN_HERE'); // Replace with a valid token
+define('WHATSAPP_API_URL', 'https://graph.facebook.com/v22.0/637421792778479/messages');
+define('ACCESS_TOKEN', 'EAA5HzO0nYi0BOZBaf6zlgEBEJCcT5lZAUOiAZCnobKiUkOeDdnLjxcyGNSlivoMsvSv9ZBY73gwSIyOx4rcOZAZBo0Hwtj0JbotvN7CxfyOsOZBZBnEZBg8KTtfGoBl1M0qnkH4e1sj83qzZCkVu3h3U1jqaysQvPXxF2OFZBP4mSWBYmg3PlJ9tzSZBVz07tFnr7yOrZCgZDZD');
 
 class WHATSAPPCHATMODEL extends APIRESPONSE
 {
@@ -15,13 +15,17 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
         switch ($_SERVER['REQUEST_METHOD']) {
             case 'POST':
                 if (isset($urlParam[1]) && $urlParam[1] === 'send') {
-                    return $this->sendMessage($data);
+                    return $this->sendMessage($_REQUEST);
                 } else {
                     throw new Exception("Invalid POST request!");
                 }
-                break;
             default:
-                return ['status' => 'error', 'message' => 'Unsupported request method.'];
+                return [
+                    "apiStatus" => [
+                        "code" => "405",
+                        "message" => "Unsupported request method."
+                    ]
+                ];
         }
     }
 
@@ -33,36 +37,107 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
 
     public function sendMessage($request)
     {
-        $vendorId = isset($request['vendorId']) ? $request['vendorId'] : $this->getVendorId();
-        $messageBody = isset($request['messageBody']) ? $request['messageBody'] : null;
-        $contactUid = isset($request['contactUid']) ? $request['contactUid'] : null;
-        $isMediaMessage = isset($request['isMediaMessage']) ? $request['isMediaMessage'] : false;
-
-        if (!$messageBody && !$isMediaMessage) {
-            return ['status' => 'error', 'message' => 'Message body is required!'];
+    // print_r($request);exit;
+        if (empty($request)) {
+            return [
+                "apiStatus" => [
+                    "code" => "400",
+                    "message" => "Invalid request data."
+                ]
+            ];
         }
+        try {
+            $recipient = isset($request['to']) ? $request['to'] : null;
+            $messageBody = isset($request['text']) ? $request['text'] : null;
+            $isMediaMessage = isset($request['isMediaMessage']) ? $request['isMediaMessage'] : false;
 
-        // Ensure contact fetching logic exists
-        $contact = $this->getContactByUid($contactUid, $vendorId);
-        if (!$contact) {
-            return ['status' => 'error', 'message' => 'Contact not found'];
+            if (!$messageBody && !$isMediaMessage) {
+                return [
+                    "apiStatus" => [
+                        "code" => "401",
+                        "message" => "Message body is required!"
+                    ]
+                ];
+            }
+
+            if (!$recipient) {
+                return [
+                    "apiStatus" => [
+                        "code" => "401",
+                        "message" => "Recipient is required!"
+                    ]
+                ];
+            }
+
+            if ($isMediaMessage) {
+                $mediaType = $request['media_type'] ?? null;
+                $caption = $request['caption'] ?? '';
+
+                // Handle file upload if file is present
+                if (isset($_FILES['file'])) {
+                    $fileUrl = $this->handleMediaUpload($_FILES['file'], $mediaType);
+                } else {
+                    $fileUrl = $request['media_url'] ?? null;
+                }
+
+                if (!$fileUrl) {
+                    return [
+                        "apiStatus" => [
+                            "code" => "400",
+                            "message" => "Media URL or uploaded file is required."
+                        ]
+                    ];
+                }
+
+                return $this->sendMediaMessage($recipient, $mediaType, $fileUrl, $caption);
+            } else {
+                return $this->sendTextMessage($recipient, $messageBody);
+            }
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "500",
+                    "message" => $e->getMessage()
+                ]
+            ];
         }
+    }
 
-        if ($isMediaMessage) {
-            $fileUrl = isset($request['media_url']) ? $request['media_url'] : null;
-            $mediaType = isset($request['media_type']) ? $request['media_type'] : null;
-            $caption = isset($request['caption']) ? $request['caption'] : '';
+    private function handleMediaUpload($file, $mediaType)
+    {
+        $uploadDir = "uploads/";
 
-            return $this->sendMediaMessage($contact['wa_id'], $mediaType, $fileUrl, $caption);
+        if ($mediaType == "image") {
+            $targetDir = $uploadDir . "image/";
+        } elseif ($mediaType == "video") {
+            $targetDir = $uploadDir . "video/";
         } else {
-            return $this->sendTextMessage($contact['wa_id'], $messageBody);
+            return false;
+        }
+
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0755, true);
+        }
+
+        $fileName = time() . "_" . basename($file['name']);
+        $targetFile = $targetDir . $fileName;
+
+        if (move_uploaded_file($file['tmp_name'], $targetFile)) {
+            return "http://localhost/Biz_convo/api/" . $targetFile;
+        } else {
+            return false;
         }
     }
 
     function sendMediaMessage($recipientPhone, $mediaType, $fileUrl, $caption = '')
     {
         if (!$recipientPhone || !$mediaType || !$fileUrl) {
-            return ['success' => false, 'message' => 'Missing required parameters.'];
+            return [
+                "apiStatus" => [
+                    "code" => "400",
+                    "message" => "Missing required parameters."
+                ]
+            ];
         }
 
         $messageData = [
@@ -81,7 +156,12 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
                 'caption' => $caption
             ];
         } else {
-            return ['success' => false, 'message' => 'Invalid media type.'];
+            return [
+                "apiStatus" => [
+                    "code" => "400",
+                    "message" => "Invalid media type."
+                ]
+            ];
         }
 
         return $this->sendRequest($messageData);
@@ -91,9 +171,13 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
     {
         $data = [
             "messaging_product" => "whatsapp",
+            "recipient_type" => "individual",
             "to" => $recipientNumber,
             "type" => "text",
-            "text" => ["body" => $message]
+            "text" => [
+                "preview_url" => false,
+                "body" => $message
+            ]
         ];
 
         return $this->sendRequest($data);
@@ -101,48 +185,60 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
 
     private function sendRequest($data)
     {
-        $ch = curl_init(WHATSAPP_API_URL);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: Bearer ' . ACCESS_TOKEN,
-            'Content-Type: application/json'
-        ]);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        try {
+            $ch = curl_init(WHATSAPP_API_URL);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Authorization: Bearer ' . ACCESS_TOKEN,
+                'Content-Type: application/json'
+            ]);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
 
-        $responseData = json_decode($response, true);
+            $responseData = json_decode($response, true);
+            if ($httpCode == 200 || $httpCode == 201) {
+                $result = [
+                    "message" => "Message sent successfully.",
+                    "wamid" => $responseData['messages'][0]['id'] ?? null
+                ];
+                $insertmsgquery = "INSERT INTO `cmp_whatsapp_messages` (agent_contact, wam_id, message_body,message_status) VALUES ('".$data['to']."', '".$responseData['messages'][0]['id']."', '".$data['text']['body']."', 'sent')";
 
-        if ($httpCode == 200 || $httpCode == 201) {
+                // print_r($insertmsgquery);exit;
+                $conn = $this->dbConnect();
+                $result11 = $conn->query($insertmsgquery);
+
+                return [
+                    "apiStatus" => [
+                        "code" => "200",
+                        "message" => "Success"
+                    ],
+                    "result" => $result
+                ];
+            } else {
+                return [
+                    "apiStatus" => [
+                        "code" => (string)($responseData['error']['code'] ?? "400"),
+                        "message" => $responseData['error']['message'] ?? "Failed to send message."
+                    ]
+                ];
+            }
+        } catch (Exception $e) {
             return [
-                'success' => true,
-                'message' => 'Message sent successfully.',
-                'wamid' => $responseData['messages'][0]['id'] ?? null
-            ];
-        } else {
-            return [
-                'success' => false,
-                'message' => $responseData['error']['message'] ?? 'Failed to send message.',
-                'error_code' => $responseData['error']['code'] ?? null
+                "apiStatus" => [
+                    "code" => "500",
+                    "message" => $e->getMessage()
+                ]
             ];
         }
     }
 
     private function getVendorId()
     {
-        return 2; // Example static ID
-    }
-
-    private function getContactByUid($contactUid, $vendorId)
-    {
-        // Simulate fetching contact from DB
-        if ($contactUid) {
-            return ['wa_id' => '919025714445']; // Replace with real data
-        }
-        return null;
+        return 1; // Example static ID
     }
 
     public function processList($request, $token)
@@ -154,8 +250,8 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
             return [
                 "apiStatus" => [
                     "code" => "401",
-                    "message" => $e->getMessage(),
-                ],
+                    "message" => $e->getMessage()
+                ]
             ];
         }
     }

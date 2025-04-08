@@ -13,20 +13,20 @@
                         },
                         "statuses": [
                             {
-                                "id": "wamid.HBgMOTE3MDkyMDg1NDExFQIAERgSM0E4RTI4MDQxQjZFMUNEQTNGAA==",
+                                "id": "wamid.HBgMOTE3MDkyMDg1NDExFQIAERgSN0IyMjVDNjkwMTUzNEQ2RTczAA==",
                                 "status": "delivered",
-                                "timestamp": "1743602620",
+                                "timestamp": "1744123487",
                                 "recipient_id": "917092085411",
                                 "conversation": {
-                                    "id": "2222d4774d4d9825f435b23a3a8c9f35",
+                                    "id": "3f252c5abd37daa6f2168d14009ca629",
                                     "origin": {
-                                        "type": "marketing"
+                                        "type": "service"
                                     }
                                 },
                                 "pricing": {
                                     "billable": true,
                                     "pricing_model": "CBP",
-                                    "category": "marketing"
+                                    "category": "service"
                                 }
                             }
                         ]

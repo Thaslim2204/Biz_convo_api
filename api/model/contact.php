@@ -32,7 +32,7 @@ class CONTACTMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] === 'exportcontacttoexcel') {
                     $result = $this->exportContactToExcel($data, $loginData);
                     return $result;
-                } elseif ($urlParam[1] === 'isheader') {
+                } elseif ($urlParam[1] === 'exportisheader') {
                     $result = $this->isheaderonly($data, $loginData);
                     return $result;
                 } else {
@@ -142,14 +142,12 @@ class CONTACTMODEL extends APIRESPONSE
     c.updated_date, 
     c.status, 
     s.id AS store_id, 
-    s.store_name, 
-    GROUP_CONCAT(DISTINCT gc.group_name) AS group_names,
-    GROUP_CONCAT(DISTINCT gcm.group_id) AS group_ids
+    s.store_name
+   
 FROM cmp_contact c
 JOIN cmp_store s ON c.store_id = s.id
-JOIN cmp_group_contact_mapping gcm ON c.id = gcm.contact_id
-JOIN cmp_group_contact gc ON gcm.group_id = gc.id
-                    WHERE c.status = 1  AND gcm.status =1
+
+                    WHERE c.status = 1  
                     AND c.created_by = " . $loginData['user_id'] . " 
                     GROUP BY c.id
                     ORDER BY c.id DESC 
@@ -253,125 +251,126 @@ JOIN cmp_group_contact gc ON gcm.group_id = gc.id
      * @return multitype:
      */
     public function getContact($data, $loginData)
-{
-    try {
-        $db = $this->dbConnect();
+    {
+        try {
+            $db = $this->dbConnect();
 
-        $id = isset($data[2]) ? intval($data[2]) : 0;
-        $userId = intval($loginData['user_id']); // Ensure it's an integer
+            $id = isset($data[2]) ? intval($data[2]) : 0;
+            $userId = intval($loginData['user_id']); // Ensure it's an integer
 
-        if ($id <= 0) {
-            throw new Exception("Bad request");
-        }
-
-        // Escape variables to prevent SQL injection
-        $id = mysqli_real_escape_string($db, $id);
-        $userId = mysqli_real_escape_string($db, $userId);
-
-        $sql = "SELECT 
-                    c.id AS ContactId, 
-                    c.vendor_id, 
-                    c.store_id, 
-                    c.first_name, 
-                    c.last_name, 
-                    c.gender,
-                    c.mobile, 
-                    c.email, 
-                    c.date_of_birth, 
-                    c.anniversary, 
-                    c.address, 
-                    c.loyality, 
-                    c.country, 
-                    c.language_code, 
-                    c.created_by, 
-                    c.created_date, 
-                    c.updated_by, 
-                    c.updated_date, 
-                    c.status, 
-                    s.id AS store_id, 
-                    s.store_name, 
-                    GROUP_CONCAT(DISTINCT gc.group_name) AS group_names,
-                    GROUP_CONCAT(DISTINCT gcm.group_id) AS group_ids
-                FROM cmp_contact c
-                JOIN cmp_store s ON c.store_id = s.id
-                LEFT JOIN cmp_group_contact_mapping gcm ON c.id = gcm.contact_id
-                LEFT JOIN cmp_group_contact gc ON gcm.group_id = gc.id
-                WHERE c.status = 1 AND gcm.status = 1
-                    AND c.created_by = $userId 
-                    AND c.id = $id
-                GROUP BY c.id";
-
-        $result = $db->query($sql);
-
-        if ($result->num_rows > 0) {
-            $contactData = null;
-
-            while ($row = $result->fetch_assoc()) {
-                if ($contactData === null) {
-                    $contactData = [
-                        "contactId" => $row['ContactId'],
-                        "storeId" => $row['store_id'],
-                        "storeName" => $row['store_name'],
-                        "firstName" => $row['first_name'],
-                        "lastName" => $row['last_name'],
-                        "gender" => $row['gender'],
-                        "mobile" => $row['mobile'],
-                        "email" => $row['email'],
-                        "country" => $row['country'],
-                        "language" => $row['language_code'],
-                        "otherInformation" => [
-                            "DOB" => $row['date_of_birth'],
-                            "anniversary" => $row['anniversary'],
-                            "loyality" => $row['loyality'],
-                            "address" => $row['address']
-                        ],
-                        "groupDetails" => [] // Initialize as an empty array
-                    ];
-                }
-
-                // Process group details
-                if (!empty($row['group_names']) && !empty($row['group_ids'])) {
-                    $groupNames = explode(",", $row['group_names']);
-                    $groupIds = explode(",", $row['group_ids']);
-
-                    foreach ($groupIds as $index => $groupId) {
-                        $contactData["groupDetails"][] = [
-                            "groupId" => $groupId,
-                            "groupName" => $groupNames[$index]
-                        ];
-                    }
-                }
+            if ($id <= 0) {
+                throw new Exception("Bad request");
             }
 
-            $resultArray = [
+            // Escape variables to prevent SQL injection
+            $id = mysqli_real_escape_string($db, $id);
+            $userId = mysqli_real_escape_string($db, $userId);
+
+            $sql = "SELECT 
+            c.id AS ContactId, 
+            c.vendor_id, 
+            c.store_id, 
+            c.first_name, 
+            c.last_name, 
+            c.gender,
+            c.mobile, 
+            c.email, 
+            c.date_of_birth, 
+            c.anniversary, 
+            c.address, 
+            c.loyality, 
+            c.country, 
+            c.language_code, 
+            c.created_by, 
+            c.created_date, 
+            c.updated_by, 
+            c.updated_date, 
+            c.status, 
+            s.id AS store_id, 
+            s.store_name, 
+            GROUP_CONCAT(DISTINCT gc.group_name) AS group_names,
+            GROUP_CONCAT(DISTINCT gcm.group_id) AS group_ids
+        FROM cmp_contact c
+        JOIN cmp_store s ON c.store_id = s.id
+        LEFT JOIN cmp_group_contact_mapping gcm ON c.id = gcm.contact_id AND gcm.status = 1
+        LEFT JOIN cmp_group_contact gc ON gcm.group_id = gc.id
+        WHERE c.status = 1 
+            AND c.created_by = $userId 
+            AND c.id = $id
+        GROUP BY c.id";
+
+
+            $result = $db->query($sql);
+
+            if ($result->num_rows > 0) {
+                $contactData = null;
+
+                while ($row = $result->fetch_assoc()) {
+                    if ($contactData === null) {
+                        $contactData = [
+                            "contactId" => $row['ContactId'],
+                            "storeId" => $row['store_id'],
+                            "storeName" => $row['store_name'],
+                            "firstName" => $row['first_name'],
+                            "lastName" => $row['last_name'],
+                            "gender" => $row['gender'],
+                            "mobile" => $row['mobile'],
+                            "email" => $row['email'],
+                            "country" => $row['country'],
+                            "language" => $row['language_code'],
+                            "otherInformation" => [
+                                "DOB" => $row['date_of_birth'],
+                                "anniversary" => $row['anniversary'],
+                                "loyality" => $row['loyality'],
+                                "address" => $row['address']
+                            ],
+                            "groupDetails" => [] // Initialize as an empty array
+                        ];
+                    }
+
+                    // Process group details
+                    if (!empty($row['group_names']) && !empty($row['group_ids'])) {
+                        $groupNames = explode(",", $row['group_names']);
+                        $groupIds = explode(",", $row['group_ids']);
+
+                        foreach ($groupIds as $index => $groupId) {
+                            $contactData["groupDetails"][] = [
+                                "groupId" => $groupId,
+                                "groupName" => $groupNames[$index]
+                            ];
+                        }
+                    }
+                }
+
+                $resultArray = [
+                    "apiStatus" => [
+                        "code" => "200",
+                        "message" => "Contact details fetched successfully",
+                    ],
+                    "result" => $contactData
+                ];
+            } else {
+                $resultArray = [
+                    "apiStatus" => [
+                        "code" => "404",
+                        "message" => "Contact details not found",
+                    ]
+                ];
+            }
+
+            // Close database connection
+            $db->close();
+
+            return $resultArray;
+        } catch (Exception $e) {
+            return [
                 "apiStatus" => [
-                    "code" => "200",
-                    "message" => "Contact details fetched successfully",
-                ],
-                "result" => $contactData
-            ];
-        } else {
-            $resultArray = [
-                "apiStatus" => [
-                    "code" => "404",
-                    "message" => "Contact details not found",
+                    "code" => "500",
+                    "message" => $e->getMessage(),
                 ]
             ];
         }
-
-        // Close database connection
-        $db->close();
-
-        return $resultArray;
-    } catch (Exception $e) {
-        return [
-            "apiStatus" => [
-                "code" => "500",
-                "message" => $e->getMessage(),
-            ]
-        ];
     }
-}
 
 
 
@@ -847,9 +846,25 @@ JOIN cmp_group_contact gc ON gcm.group_id = gc.id
             if (empty($rows) || count($rows) < 2) {
                 throw new Exception("Excel file is empty or invalid format.");
             }
+            //Get the Contact id from the login data
+            $user_id = $loginData['user_id'];
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
+            $result = $db->query($sql);
+
+            if ($result) {
+                $row = $result->fetch_assoc();
+                if (!$row || !isset($row['vendor_id'])) {
+                    throw new Exception("Vendor ID not found for user ID: $user_id");
+                }
+                $vendor_id = $row['vendor_id'];
+            } else {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+
+
 
             unset($rows[1]); // Remove header row
-            array_shift($rows);
+            // array_shift($rows);
 
             foreach ($rows as $row) {
                 $firstName   = $db->real_escape_string(trim($row['B']));
@@ -858,12 +873,14 @@ JOIN cmp_group_contact gc ON gcm.group_id = gc.id
                 $email       = $db->real_escape_string(trim($row['E']));
                 $mobile      = $db->real_escape_string(trim($row['F']));
                 $language    = $db->real_escape_string(trim($row['G']));
-                $dob         = $db->real_escape_string(trim($row['H']));
+                // $dob         = $db->real_escape_string(trim($row['H']));
                 $address     = $db->real_escape_string(trim($row['I']));
                 $loyalty     = $db->real_escape_string(trim($row['J']));
-                $anniversary = $db->real_escape_string(trim($row['K']));
-                $storeName   = $db->real_escape_string(trim($row['L']));
-
+                // $anniversary = $db->real_escape_string(trim($row['K']));
+                $country   = $db->real_escape_string(trim($row['L']));
+                $storeName   = $db->real_escape_string(trim($row['M']));
+                $rawDOB = trim($row['H']);
+                $rawAnniversary = trim($row['K']);
                 // **Logging for Debugging**
                 error_log("Processing row: " . json_encode($row));
 
@@ -871,22 +888,6 @@ JOIN cmp_group_contact gc ON gcm.group_id = gc.id
                 if (empty($firstName) || empty($storeName) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                     throw new Exception("Invalid or missing required fields in row: " . json_encode($row));
                 }
-
-                //Get the Contact id from the login data
-                $user_id = $loginData['user_id'];
-                $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
-                $result = $db->query($sql);
-
-                if ($result) {
-                    $row = $result->fetch_assoc();
-                    if (!$row || !isset($row['vendor_id'])) {
-                        throw new Exception("Vendor ID not found for user ID: $user_id");
-                    }
-                    $vendor_id = $row['vendor_id'];
-                } else {
-                    throw new Exception("Database query failed: " . $db->error);
-                }
-
                 // **Check if Store Exists**
                 $storeQuery = "SELECT id FROM cmp_store WHERE store_name = '$storeName'  LIMIT 1";
                 $storeResult = $db->query($storeQuery);
@@ -905,19 +906,30 @@ JOIN cmp_group_contact gc ON gcm.group_id = gc.id
                 if ($checkResult->num_rows > 0) {
                     // Contact already exists, log and continue
                     error_log("Skipping existing contact: " . json_encode($row));
-                    continue;
+                    return; // Replace 'continue' with 'return' to exit the function or handle the flow appropriately
                 }
+                // Convert dates to MySQL format (YYYY-MM-DD)
 
+                $dob = !empty($rawDOB) ? DateTime::createFromFormat('m/d/Y', $rawDOB)->format('Y-m-d') : null;
+                $anniversary = !empty($rawAnniversary) ? DateTime::createFromFormat('m/d/Y', $rawAnniversary)->format('Y-m-d') : null;
+                // $dob = !empty($rawDOB) ? DateTime::createFromFormat('d-m-Y', $rawDOB)?->format('Y-m-d') : null;
+                // $anniversary = !empty($rawAnniversary) ? DateTime::createFromFormat('d-m-Y', $rawAnniversary)?->format('Y-m-d') : null;
+
+                // Escape for SQL
+                $dob = $dob ? $db->real_escape_string($dob) : null;
+                $anniversary = $anniversary ? $db->real_escape_string($anniversary) : null;
                 // **Insert Data into Database**
                 $insertQuery = "INSERT INTO cmp_contact 
-                                (first_name, last_name,gender, email, mobile, language_code, date_of_birth, address, loyality, anniversary, store_id, vendor_id, created_by, status) 
+                                (first_name, last_name,gender, email, mobile, language_code, date_of_birth, address, loyality, anniversary,country, store_id, vendor_id, created_by) 
                                 VALUES 
-                                ('$firstName', '$lastName', '$gender', '$email', '$mobile', '$language', '$dob', '$address', '$loyalty', '$anniversary', '$store_id', '$vendor_id', '$user_id', 1)";
-
+                                ('$firstName', '$lastName', '$gender', '$email', '$mobile', '$language', '$dob', '$address', '$loyalty', '$anniversary','$country', '$store_id', '$vendor_id', '$user_id')";
+                // print_r($insertQuery);
+                // exit;
                 if (!$db->query($insertQuery)) {
                     throw new Exception("Error inserting data: " . $db->error);
                 }
             }
+            // echo "1234";
 
             $resultArray = [
                 "apiStatus" => [
@@ -966,7 +978,7 @@ JOIN cmp_group_contact gc ON gcm.group_id = gc.id
                 throw new Exception("Database query failed: " . $db->error);
             }
             // Set column headers
-            $headers = ['S.No',  'First Name', 'Last Name',  'Gender','Email', 'Mobile', 'language', 'Date of Birth', 'Address', 'loyality', 'Anniversary Date',  'Store Name'];
+            $headers = ['S.No',  'First Name', 'Last Name',  'Gender', 'Email', 'Mobile', 'language', 'Date of Birth', 'Address', 'loyality', 'Anniversary Date', 'Country', 'Store Name'];
             $column = 'A';
             foreach ($headers as $header) {
                 $sheet->setCellValue($column . '1', $header);
@@ -987,6 +999,7 @@ JOIN cmp_group_contact gc ON gcm.group_id = gc.id
                     c.anniversary,
                     c.address,
                     c.loyality,
+                    c.country,
 
                     s.store_name
 
@@ -1016,6 +1029,7 @@ JOIN cmp_group_contact gc ON gcm.group_id = gc.id
                 $sheet->setCellValue($column++ . $rowIndex, $row['address']);
                 $sheet->setCellValue($column++ . $rowIndex, $row['loyality']);
                 $sheet->setCellValue($column++ . $rowIndex, $row['anniversary']);
+                $sheet->setCellValue($column++ . $rowIndex, $row['country']);
                 $sheet->setCellValue($column++ . $rowIndex, $row['store_name']);
                 $rowIndex++;
             }
@@ -1039,42 +1053,42 @@ JOIN cmp_group_contact gc ON gcm.group_id = gc.id
         }
     }
     public function isheaderonly($data, $loginData)
-{
-    try {
-        $db = $this->dbConnect();
-        $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
+    {
+        try {
+            $db = $this->dbConnect();
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
 
-      
 
-        // Set column headers
-        $headers = ['S.No', 'First Name', 'Last Name', 'Gender','Email', 'Mobile', 'Language', 'Date of Birth', 'Address', 'Loyality', 'Anniversary Date', 'Store Name'];
-        $column = 'A';
-        foreach ($headers as $header) {
-            $sheet->setCellValue($column . '1', $header);
-            $sheet->getStyle($column . '1')->getFont()->setBold(true);
-            $sheet->getStyle($column . '1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getColumnDimension($column)->setAutoSize(true);
-            $column++;
+
+            // Set column headers
+            $headers = ['S.No', 'First Name', 'Last Name', 'Gender', 'Email', 'Mobile', 'Language', 'Date of Birth', 'Address', 'Loyality', 'Anniversary Date', 'Country', 'Store Name'];
+            $column = 'A';
+            foreach ($headers as $header) {
+                $sheet->setCellValue($column . '1', $header);
+                $sheet->getStyle($column . '1')->getFont()->setBold(true);
+                $sheet->getStyle($column . '1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getColumnDimension($column)->setAutoSize(true);
+                $column++;
+            }
+
+            // Output the file directly for download
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="Contact_Data_' . date('Ymd_His') . '.xlsx"');
+            header('Cache-Control: max-age=0');
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+            exit;
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "401",
+                    "message" => $e->getMessage()
+                ]
+            ];
         }
-
-        // Output the file directly for download
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment; filename="Contact_Data_' . date('Ymd_His') . '.xlsx"');
-        header('Cache-Control: max-age=0');
-
-        $writer = new Xlsx($spreadsheet);
-        $writer->save('php://output');
-        exit;
-    } catch (Exception $e) {
-        return [
-            "apiStatus" => [
-                "code" => "401",
-                "message" => $e->getMessage()
-            ]
-        ];
     }
-}
 
 
     //multiple delete for contact 

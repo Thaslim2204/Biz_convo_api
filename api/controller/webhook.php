@@ -21,7 +21,7 @@ class WEBHOOK extends WEBHOOKMODEL
             //  Handle POST request for webhook events
             if ($method === "POST") {
                 // echo "calling";
-                file_put_contents("webhook_log.txt", date("Y-m-d H:i:s") . " - " . print_r($data, true) . "\n", FILE_APPEND);
+                file_put_contents("webhook_log.txt", date("Y-m-d H:i:s") . " - " . json_encode($data, JSON_PRETTY_PRINT) . "\n", FILE_APPEND);
                 $this->processWebhookData();
             }
 

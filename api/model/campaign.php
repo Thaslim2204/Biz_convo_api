@@ -17,15 +17,6 @@ class CAMPAIGNMODEL extends APIRESPONSE
                 if ($urlParam[1] == "get") {
                     $result = $this->getcampaign($data, $loginData);
                 } elseif ($urlParam[1] === 'dashboard') {
-                    // if ($urlParam[2] === 'active') {
-                    //     $result = $this->getDashboardactive($data, $loginData);
-                    //     return $result;
-                    // } elseif ($urlParam[2] === 'deactive') {
-                    //     // $result = $this->getDashboarddeactive($data, $loginData);
-                    //     // return $result;
-                    // }else{
-                    //     throw new Exception("Unable to proceed your request!");
-                    // }                } elseif ($urlParam[1] == "active") {
                     $result = $this->campaignactive($data, $loginData);
                     return $result;
                 } elseif ($urlParam[1] == "active") {
@@ -147,7 +138,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
             $queryService = "SELECT c.id,c.title,c.template_id,c.created_date,c.active_status,c.schedule_at,c.status AS campaignStatus,wt.template_name,wt.language
                  FROM cmp_campaign AS c 
                  JOIN cmp_whatsapp_templates AS wt ON wt.id = c.template_id
-                 WHERE c.status = 1 AND wt.status=1 AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
+                 WHERE c.status = 1 AND wt.status=1 AND c.active_status=1 AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
                  ORDER BY id DESC 
                  LIMIT $start_index, $end_index";
 
@@ -483,7 +474,6 @@ class CAMPAIGNMODEL extends APIRESPONSE
             WHERE c.id='" . $data['templateId'] . "' 
             AND c.status = 1 
             AND wt.status = 1 
-           
             AND c.created_by = '" . $loginData['user_id'] . "' 
             AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
             ORDER BY c.id DESC";

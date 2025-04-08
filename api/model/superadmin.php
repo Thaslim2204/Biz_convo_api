@@ -184,101 +184,133 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
     }
 
     private function vendorloginCheck($data, $loginData)
-    {
-        try {
-            if (empty($data['vendorId'])) {
-                throw new Exception("Please provide the Vendor ID");
+{
+    try {
+        if (empty($data['vendorId'])) {
+            throw new Exception("Please provide the Vendor ID");
+        }
+
+        $db = $this->dbConnect();
+
+        // Fetch Vendor Details
+        $vendorQuery = "SELECT * FROM cmp_vendor WHERE id = '" . $data['vendorId'] . "' AND status = 1";
+        $vendorResult = $db->query($vendorQuery);
+
+        if ($vendorResult->num_rows == 0) {
+            throw new Exception("Vendor not found.");
+        }
+
+        $vendorDetails = $vendorResult->fetch_assoc();
+
+        // Fetch all user_ids mapped to the vendor
+        $vendorAdminQuery = "SELECT user_id FROM cmp_vendor_user_mapping WHERE vendor_id = '" . $data['vendorId'] . "' AND status = 1";
+        $vendorAdminResult = $db->query($vendorAdminQuery);
+
+        if ($vendorAdminResult->num_rows == 0) {
+            throw new Exception("No users mapped to this vendor.");
+        }
+
+        //Loop through and find user with 'Vendor Admin' role
+        $vendorAdminUserId = null;
+        while ($row = $vendorAdminResult->fetch_assoc()) {
+            $userId = $row['user_id'];
+
+            // Fetch role ids for user
+            $roleMapQuery = "SELECT role_id FROM cmp_user_role_mapping WHERE user_id = '$userId'";
+            $roleMapResult = $db->query($roleMapQuery);
+            if ($roleMapResult->num_rows == 0) {
+                continue; // no role assigned
             }
 
-            $db = $this->dbConnect();
+            while ($roleRow = $roleMapResult->fetch_assoc()) {
+                $roleId = $roleRow['role_id'];
 
-            // Fetch Vendor Details
-            $vendorQuery = "SELECT * FROM cmp_vendor WHERE id = '" . $data['vendorId'] . "' AND status = 1";
-            $vendorResult = $db->query($vendorQuery);
-
-            if ($vendorResult->num_rows == 0) {
-                throw new Exception("Vendor not found.");
+                // Fetch role name from master table
+                $roleNameQuery = "SELECT role_name FROM cmp_mst_role WHERE role_id = '$roleId'";
+                $roleNameResult = $db->query($roleNameQuery);
+                if ($roleNameResult->num_rows > 0) {
+                    $role = $roleNameResult->fetch_assoc();
+                    if (strtolower($role['role_name']) === 'vendor_super_admin') {
+                        $vendorAdminUserId = $userId; // found vendor admin
+                        break 2; // break both loops
+                    }
+                }
             }
+        }
 
-            $vendorDetails = $vendorResult->fetch_assoc();
-            $userId = $vendorDetails['created_by'];
+        if (!$vendorAdminUserId) {
+            throw new Exception("Vendor Admin not found for this vendor.");
+        }
 
-            // Fetch User Details from cmp_users table
-            $userQuery = "SELECT * FROM cmp_users WHERE id = '" . $userId . "' AND status=1 AND active_status=1";
-            $userResult = $db->query($userQuery);
+        //Fetch vendor admin user details
+        $userQuery = "SELECT * FROM cmp_users WHERE id = '" . $vendorAdminUserId . "' AND status=1 AND active_status=1";
+        $userResult = $db->query($userQuery);
 
-            if ($userResult->num_rows == 0) {
-                throw new Exception("User not found.");
-            }
+        if ($userResult->num_rows == 0) {
+            throw new Exception("Vendor Admin user not found.");
+        }
 
-            $userDetails = $userResult->fetch_assoc();
+        $userDetails = $userResult->fetch_assoc();
+        $userId = $userDetails['id'];
 
-            // Check for an existing active token
-            $tokenCheckQuery = "SELECT token FROM cmp_user_login_log WHERE user_id = '$userId' AND login_status = 1 AND status = 1 ORDER BY login_time DESC LIMIT 1";
-            $tokenResult = $db->query($tokenCheckQuery);
+        //Check for existing active token
+        $tokenCheckQuery = "SELECT token FROM cmp_user_login_log WHERE user_id = '$userId' AND login_status = 1 AND status = 1 ORDER BY login_time DESC LIMIT 1";
+        $tokenResult = $db->query($tokenCheckQuery);
 
-            if ($tokenResult->num_rows > 0) {
-                $row   = $tokenResult->fetch_assoc();
-                $token = $row['token']; // Use existing token
-            } else {
-                // Generate a new JWT token if no active token is found
-                $token = $this->generateJWTToken($userDetails['id'], $userDetails['username']);
-
-                // Insert into cmp_user_login_log
-                $timeNow = date("Y-m-d H:i:s");
-                $sqlInsertUserLog = "INSERT INTO cmp_user_login_log (user_id, token, login_time, last_active_time) 
+        if ($tokenResult->num_rows > 0) {
+            $row   = $tokenResult->fetch_assoc();
+            $token = $row['token'];
+        } else {
+            // Generate a new token
+            $token = $this->generateJWTToken($userDetails['id'], $userDetails['username']);
+            $timeNow = date("Y-m-d H:i:s");
+            $sqlInsertUserLog = "INSERT INTO cmp_user_login_log (user_id, token, login_time, last_active_time) 
                                  VALUES ('$userId', '$token', '$timeNow', '$timeNow')";
-                $db->query($sqlInsertUserLog);
-            }
+            $db->query($sqlInsertUserLog);
+        }
 
-            // Insert into cmp_superadmin_vendor_login_log
-            $vendorId = $data['vendorId'];
-            $timeNow  = date("Y-m-d H:i:s", strtotime("+4 hours 30 minutes"));
-            $sqlInsertSuperAdminLog = "INSERT INTO cmp_superadmin_vendor_login_log 
+        //Log into superadmin-vendor login log
+        $vendorId = $data['vendorId'];
+        $timeNow  = date("Y-m-d H:i:s", strtotime("+4 hours 30 minutes"));
+        $sqlInsertSuperAdminLog = "INSERT INTO cmp_superadmin_vendor_login_log 
                                    (user_id, vendor_id, token, login_time, last_active_time, created_date) 
                                    VALUES ('$userId', '$vendorId', '$token', '$timeNow', '$timeNow', NOW())";
-            $db->query($sqlInsertSuperAdminLog);
-            // print_r($sqlInsertSuperAdminLog);exit;
+        $db->query($sqlInsertSuperAdminLog);
 
-            $userDetails = array(
-                "loginid" => $userDetails['id'],
-                "first_name" => $userDetails['first_name'],
-                "last_name" => $userDetails['last_name'],
-                "username" => $userDetails['username'],
-                // 'roles' => $roles,
-            );
-            $result = array(
-                "token" => $token,
-                "userDetail" => $userDetails,
-            );
+        //Prepare response
+        $userDetails = array(
+            "loginid" => $userDetails['id'],
+            "first_name" => $userDetails['first_name'],
+            "last_name" => $userDetails['last_name'],
+            "username" => $userDetails['username'],
+        );
 
-            // if (empty($newuser)) {
+        $result = array(
+            "token" => $token,
+            "userDetail" => $userDetails,
+        );
 
-            //     $new = array(
-            //         "firstTime" => "true",
-            //     );
-            //     $result = array_merge($result, $new);
-            // }
+        $resultArray = array(
+            "apiStatus" => array(
+                "code" => "200",
+                "message" => "Login Successfully",
+            ),
+            "result" => $result,
+        );
 
-            $resultArray = array(
-                "apiStatus" => array(
-                    "code" => "200",
-                    "message" => "Login Successfully",
-                ),
-                "result" => $result,
-            );
-
-            return $resultArray;
-        } catch (Exception $e) {
-            $this->loginLogCreate($e->getMessage(), "", getcwd());
-            return array(
-                "apiStatus" => array(
-                    "code" => "401",
-                    "message" => $e->getMessage(),
-                ),
-            );
-        }
+        return $resultArray;
+    } catch (Exception $e) {
+        $this->loginLogCreate($e->getMessage(), "", getcwd());
+        return array(
+            "apiStatus" => array(
+                "code" => "401",
+                "message" => $e->getMessage(),
+            ),
+        );
     }
+}
+
+
 
     /**
      * Log create For Login

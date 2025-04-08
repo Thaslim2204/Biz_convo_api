@@ -30,7 +30,7 @@ class STOREMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] === 'exportstoretoexcel') {
                     $result = $this->exportStoreToExcel($data, $loginData);
                     return $result;
-                } elseif ($urlParam[1] === 'isheader') {
+                } elseif ($urlParam[1] === 'exportisheader') {
                     $result = $this->isheaderonly($data, $loginData);
                     return $result;
                 } elseif ($urlParam[1] == "active") {
@@ -691,11 +691,15 @@ class STOREMODEL extends APIRESPONSE
             // Process Excel Rows
             foreach ($rows as $row) {
                 $storeName = trim($row['B']);
-                $address   = trim($row['C']);
-                $phone     = trim($row['D']);
-                $email     = trim($row['E']);
+                $address1   = trim($row['C']);
+                $address2   = trim($row['D']);
+                $dist   = trim($row['E']);
+                $state   = trim($row['F']);
+                $pincode   = trim($row['G']);
+                $phone     = trim($row['H']);
+                $email     = trim($row['I']);
 
-                if (empty($storeName) || empty($address) || empty($phone) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                if (empty($storeName) || empty($address1) || empty($phone) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                     throw new Exception("Invalid data found in row: " . json_encode($row));
                 }
 
@@ -709,8 +713,8 @@ class STOREMODEL extends APIRESPONSE
                 } else {
 
                     // Insert Store into cmp_store
-                    $insertStoreQuery = "INSERT INTO cmp_store (uid,store_name, address, phone, email, created_by, status) 
-                                         VALUES (' $uid ','$storeName', '$address', '$phone', '$email', '$user_id', 1)";
+                    $insertStoreQuery = "INSERT INTO cmp_store (uid,store_name, address_line1,address_line2,dist,state,pincode, phone, email, created_by, status) 
+                                         VALUES (' $uid ','$storeName', '$address1', '$address2', '$dist', '$state', '$pincode', '$phone', '$email', '$user_id', 1)";
                     if (!$db->query($insertStoreQuery)) {
                         throw new Exception("Error inserting store: " . $db->error);
                     }
@@ -791,7 +795,11 @@ class STOREMODEL extends APIRESPONSE
                 $column = 'A';
                 $sheet->setCellValue($column++ . $rowIndex, $sno++);
                 $sheet->setCellValue($column++ . $rowIndex, $row['store_name']);
-                $sheet->setCellValue($column++ . $rowIndex, $row['address']);
+                $sheet->setCellValue($column++ . $rowIndex, $row['address_line1']);
+                $sheet->setCellValue($column++ . $rowIndex, $row['address_line2']);
+                $sheet->setCellValue($column++ . $rowIndex, $row['dist']);
+                $sheet->setCellValue($column++ . $rowIndex, $row['state	']);
+                $sheet->setCellValue($column++ . $rowIndex, $row['pincode	']);
                 $sheet->setCellValue($column++ . $rowIndex, $row['phone']);
                 $sheet->setCellValue($column++ . $rowIndex, $row['email']);
                 $sheet->getStyle('A' . $rowIndex . ':' . $column . $rowIndex)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER); // Center align
@@ -840,7 +848,7 @@ class STOREMODEL extends APIRESPONSE
             }
 
             // Set column headers
-            $headers = ['S.No', 'Store Name', 'Address', 'Phone', 'Email'];
+            $headers = ['S.No', 'Store Name', 'Address Line 1','Address Line 2','District','State','Pincode', 'Phone', 'Email'];
             $column = 'A';
             foreach ($headers as $header) {
                 $sheet->setCellValue($column . '1', $header);

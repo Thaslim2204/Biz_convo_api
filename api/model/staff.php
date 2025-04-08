@@ -34,7 +34,7 @@ class STAFFMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] === 'exportstafftoexcel') {
                     $result = $this->exportStaffToExcel($data, $loginData);
                     return $result;
-                } elseif ($urlParam[1] === 'isheader') {
+                } elseif ($urlParam[1] === 'exportisheader') {
                     $result = $this->isheaderonly($data, $loginData);
                     return $result;
                 } else {
@@ -791,6 +791,31 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
                 if (empty($firstName) || empty($email) || empty($storeName)) {
                     throw new Exception("Missing required fields in row: " . json_encode($row));
                 }
+                 // Check if store exists
+                 $storeQuery = "SELECT id FROM cmp_store WHERE store_name = '$storeName' AND status = 1 AND created_by ='" . $loginData['user_id'] . "'";
+                 $storeResult = $db->query($storeQuery);
+                 if ($storeResult->num_rows === 0) {
+                     throw new Exception("Store not found: " . $storeName);
+                 }
+                 $store_id = $storeResult->fetch_assoc()['id'];
+ 
+                 // Fetch vendor_id using store_id
+                 $vendorQuery = "SELECT vendor_id FROM cmp_vendor_store_mapping WHERE store_id = '$store_id' LIMIT 1";
+                 $vendorResult = $db->query($vendorQuery);
+                 if ($vendorResult->num_rows > 0) {
+                     // $vendor_id = $vendorResult->fetch_assoc()['vendor_id'];
+                 } else {
+                     throw new Exception("Vendor ID not found for store ID: $store_id");
+                 }
+ 
+                 // Get vendor_id from loginData
+                 $user_id = $loginData['user_id'];
+                 $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id AND status = 1";
+                 $result = $db->query($sql);
+                 if (!$result || $result->num_rows === 0) {
+                     throw new Exception("Vendor ID not found for user.");
+                 }
+                 $vendor_id = $result->fetch_assoc()['vendor_id'];
 
                 // Check if staff exists
                 $sql = "SELECT id FROM cmp_users WHERE email = '$email' AND status = 1 AND created_by ='" . $loginData['user_id'] . "'";
@@ -814,31 +839,7 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
                           ON DUPLICATE KEY UPDATE role_id = '4', status = '1'";
                 $db->query($roleQuery);
 
-                // Check if store exists
-                $storeQuery = "SELECT id FROM cmp_store WHERE store_name = '$storeName' AND status = 1 AND created_by ='" . $loginData['user_id'] . "'";
-                $storeResult = $db->query($storeQuery);
-                if ($storeResult->num_rows === 0) {
-                    throw new Exception("Store not found: " . $storeName);
-                }
-                $store_id = $storeResult->fetch_assoc()['id'];
-
-                // Fetch vendor_id using store_id
-                $vendorQuery = "SELECT vendor_id FROM cmp_vendor_store_mapping WHERE store_id = '$store_id' LIMIT 1";
-                $vendorResult = $db->query($vendorQuery);
-                if ($vendorResult->num_rows > 0) {
-                    // $vendor_id = $vendorResult->fetch_assoc()['vendor_id'];
-                } else {
-                    throw new Exception("Vendor ID not found for store ID: $store_id");
-                }
-
-                // Get vendor_id from loginData
-                $user_id = $loginData['user_id'];
-                $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id AND status = 1";
-                $result = $db->query($sql);
-                if (!$result || $result->num_rows === 0) {
-                    throw new Exception("Vendor ID not found for user.");
-                }
-                $vendor_id = $result->fetch_assoc()['vendor_id'];
+               
 
                 // Insert into cmp_vendor_store_staff_mapping
                 $storeMappingQuery = "INSERT INTO cmp_vendor_store_staff_mapping (staff_id, store_id, vendor_id,created_by) 
@@ -984,7 +985,7 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
             $sheet = $spreadsheet->getActiveSheet();
 
             // Set column headers
-            $headers = ['S.No', 'First Name', 'Last Name', 'Username', 'Email', 'Mobile', 'Store Name'];
+            $headers = ['S.No', 'First Name', 'Last Name', 'Username', 'Email', 'Mobile', 'Store Name','Privilege'];
             $column = 'A';
             foreach ($headers as $header) {
                 $sheet->setCellValue($column . '1', $header);
@@ -994,9 +995,7 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
                 $column++;
             }
 
-            // Clear output buffering just in case
-            // if (ob_get_contents()) ob_end_clean();
-
+            if (ob_get_contents()) ob_end_clean();
 
             // Output the file directly for download
             header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -1089,15 +1088,17 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
     // //store ative and deactive
     public function useractive($data, $loginData)
     {
+        // print_r($data);exit;
+
         try {
             $id = $data[2];
             $db = $this->dbConnect();
             if (empty($data[2])) {
                 throw new Exception("Bad request");
             }
-
+            $user_id = $loginData['user_id'];
             $db = $this->dbConnect();
-            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_store WHERE id = $id AND status=1";
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_users WHERE id = $id AND status=1";
 
             $result = $db->query($checkIdQuery);
             $rowCount = $result->fetch_assoc()['count'];
@@ -1112,15 +1113,15 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
                     ),
                 );
             }
-            $ActiveQuery = "UPDATE cmp_store SET active_status = 1 WHERE status = 1 AND id = $id";
+            $ActiveQuery = "UPDATE cmp_users SET active_status = 1 WHERE status = 1 AND id = $id AND active_status = 0";
 
             if ($db->query($ActiveQuery) === true) {
                 $db->close();
                 $statusCode = "200";
-                $statusMessage = "Store activated successfully.";
+                $statusMessage = "User activated successfully.";
             } else {
                 $statusCode = "500";
-                $statusMessage = "Unable to activate Store, please try again later.";
+                $statusMessage = "Unable to activate User, please try again later.";
             }
             $resultArray = array(
                 "apiStatus" => array(
@@ -1142,7 +1143,7 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
                 throw new Exception("Bad request");
             }
             $db = $this->dbConnect();
-            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_store WHERE id = $id AND active_status=1 AND status=1";
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_users WHERE id = $id AND active_status=1 AND status=1";
             // print_r($checkIdQuery);exit;
 
             $result = $db->query($checkIdQuery);
@@ -1160,15 +1161,15 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
                     ),
                 );
             }
-            $deactiveQuery = "UPDATE cmp_store SET active_status = 0 WHERE status = 1 AND id = $id";
+            $deactiveQuery = "UPDATE cmp_users SET active_status = 0 WHERE status = 1 AND id = $id";
 
             if ($db->query($deactiveQuery) === true) {
                 $db->close();
                 $statusCode = "200";
-                $statusMessage = "Store Deactivated successfully.";
+                $statusMessage = "User Deactivated successfully.";
             } else {
                 $statusCode = "500";
-                $statusMessage = "Unable to Deactivate Store, please try again later.";
+                $statusMessage = "Unable to Deactivate User, please try again later.";
             }
             $resultArray = array(
                 "apiStatus" => array(

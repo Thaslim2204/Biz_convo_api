@@ -515,7 +515,7 @@ class GROUPMODEL extends APIRESPONSE
             // Validate input data
             $validationData = array(
                 "GroupName" => $data['groupName'],
-                "Description"      => $data['description'],
+                // "Description"      => $data['description'],
             );
             $this->validateInputDetails($validationData);
 
