@@ -769,7 +769,7 @@ class STOREMODEL extends APIRESPONSE
                 throw new Exception("Database query failed: " . $db->error);
             }
             // Set column headers
-            $headers = ['S.No',  'Store Name', 'Address',  'Phone', 'Email'];
+            $headers = ['S.No',  'Store Name', 'Address Line 1', 'Address Line 2', 'District', 'State', 'Pincode',  'Phone', 'Email'];
             $column = 'A';
             foreach ($headers as $header) {
                 $sheet->setCellValue($column . '1', $header);

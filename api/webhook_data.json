@@ -13,21 +13,10 @@
                         },
                         "statuses": [
                             {
-                                "id": "wamid.HBgMOTE3MDkyMDg1NDExFQIAERgSN0IyMjVDNjkwMTUzNEQ2RTczAA==",
-                                "status": "delivered",
-                                "timestamp": "1744123487",
-                                "recipient_id": "917092085411",
-                                "conversation": {
-                                    "id": "3f252c5abd37daa6f2168d14009ca629",
-                                    "origin": {
-                                        "type": "service"
-                                    }
-                                },
-                                "pricing": {
-                                    "billable": true,
-                                    "pricing_model": "CBP",
-                                    "category": "service"
-                                }
+                                "id": "wamid.HBgMOTE3MDkyMDg1NDExFQIAERgSOUMyMTkzMUI1MjA1NkQ1RkREAA==",
+                                "status": "read",
+                                "timestamp": "1744023142",
+                                "recipient_id": "917092085411"
                             }
                         ]
                     },

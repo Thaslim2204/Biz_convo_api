@@ -46,7 +46,7 @@ class WEBHOOKMODEL extends APIRESPONSE
         // Log incoming webhook data for debugging
         file_put_contents("webhook_log.txt", date("Y-m-d H:i:s") . " - " . json_encode($data, JSON_PRETTY_PRINT) . "\n", FILE_APPEND);
         file_put_contents("webhook_data.json", json_encode($data, JSON_PRETTY_PRINT));
-        
+
         if (isset($data['entry'])) {
             foreach ($data['entry'] as $entry) {
 
@@ -54,7 +54,7 @@ class WEBHOOKMODEL extends APIRESPONSE
                     if (isset($change['value']['messages'])) {
                         foreach ($change['value']['messages'] as $message) {
                             // Process each message
-                            $this->processMessage($change['value']['metadata']['phone_number_id'], $message,$data);
+                            $this->processMessage($change['value']['metadata']['phone_number_id'], $message, $data);
                         }
                     }
                 }
@@ -67,7 +67,7 @@ class WEBHOOKMODEL extends APIRESPONSE
                     if (isset($change['value']['statuses'])) {
                         foreach ($change['value']['statuses'] as $message) {
                             // Process each message
-                            $this->processMessage($change['value']['metadata']['phone_number_id'], $message,$data);
+                            $this->processMessage($change['value']['metadata']['phone_number_id'], $message, $data);
                         }
                     }
                 }
@@ -112,7 +112,7 @@ class WEBHOOKMODEL extends APIRESPONSE
         $messageId = $message['id'];
 
         // Store the incoming message in the database
-        $this->storeMessageInDB($message,$data);
+        $this->storeMessageInDB($message, $data);
         // $this->handleCmpWhatsappMessage($message);
 
         // Send an auto-reply message
@@ -124,94 +124,94 @@ class WEBHOOKMODEL extends APIRESPONSE
     }
 
     public function storeMessageInDB($message = null, $data)
-{
-    $db = $this->dbConnect();
+    {
+        $db = $this->dbConnect();
 
-    // Get raw input if $message not passed
-    // if (!$message) {
-    //     $rawData = file_get_contents("php://input");
-    //     $data = json_decode($rawData, true);
-    // } else {
-    //     $data = $message;
-    // }
+        // Get raw input if $message not passed
+        // if (!$message) {
+        //     $rawData = file_get_contents("php://input");
+        //     $data = json_decode($rawData, true);
+        // } else {
+        //     $data = $message;
+        // }
 
-    $entry = $data['entry'][0]['changes'][0]['value'];
-    $created_date = date('Y-m-d H:i:s');
-// echo "come here";
-// print_r(json_encode($entry));exit;
-    // 🧩 USER message handler
-    if (isset($entry['messages'])) {
-        $msg = $entry['messages'][0];
-        $sender = mysqli_real_escape_string($db, $msg['from']);
-        $wam_id = mysqli_real_escape_string($db, $msg['id']);
-        $messageText = isset($msg['text']['body']) ? mysqli_real_escape_string($db, $msg['text']['body']) : '';
-        $messageType = mysqli_real_escape_string($db, $msg['type']);
-        $messageStatus = 'pending';
-        $agent = 'user';
-        $agent_contact = $sender;
-        // $created_by = $agent;
+        $entry = $data['entry'][0]['changes'][0]['value'];
+        $created_date = date('Y-m-d H:i:s');
+        // echo "come here";
+        // print_r(json_encode($entry));exit;
+        //  USER message handler
+        if (isset($entry['messages'])) {
+            $msg = $entry['messages'][0];
+            $sender = mysqli_real_escape_string($db, $msg['from']);
+            $wam_id = mysqli_real_escape_string($db, $msg['id']);
+            $messageText = isset($msg['text']['body']) ? mysqli_real_escape_string($db, $msg['text']['body']) : '';
+            $messageType = mysqli_real_escape_string($db, $msg['type']);
+            $messageStatus = 'pending';
+            $agent = 'user';
+            $agent_contact = $sender;
+            // $created_by = $agent;
+            $updated_date = date('Y-m-d H:i:s');
+            $checkQuery = "SELECT id FROM cmp_whatsapp_messages WHERE wam_id = '$wam_id' LIMIT 1";
+            $result = mysqli_query($db, $checkQuery);
+            print_r($checkQuery);
+            if (mysqli_num_rows($result) > 0) {
+                // echo "update quers";
 
-        $checkQuery = "SELECT id FROM cmp_whatsapp_messages WHERE wam_id = '$wam_id' LIMIT 1";
-        $result = mysqli_query($db, $checkQuery);
-print_r($checkQuery);
-        if (mysqli_num_rows($result) > 0) {
-            // echo "update quers";
-
-            $updateQuery = "
+                $updateQuery = "
                 UPDATE cmp_whatsapp_messages 
-                SET message_status = '$messageStatus' 
+                SET message_status = '$messageStatus' , updated_date='$updated_date'
                 WHERE wam_id = '$wam_id'
             ";
-            mysqli_query($db, $updateQuery);
-        } else {
-            // echo "inset quers";
-            $insertQuery = "
+                mysqli_query($db, $updateQuery);
+            } else {
+                // echo "inset quers";
+                $insertQuery = "
                 INSERT INTO cmp_whatsapp_messages 
                 (agent, agent_contact, message_type, wam_id, message_body, message_status, created_date)
                 VALUES 
                 ('$agent', '$agent_contact', '$messageType', '$wam_id', '$messageText', '$messageStatus',  '$created_date')
             ";
-            mysqli_query($db, $insertQuery);
+                mysqli_query($db, $insertQuery);
+            }
         }
-    }
 
-    // 🤖 BOT status handler
-    if (isset($entry['statuses'])) {
-        $status = $entry['statuses'][0];
-        $wam_id = mysqli_real_escape_string($db, $status['id']);
-        $messageStatus = mysqli_real_escape_string($db, $status['status']);
-        $agent_contact = mysqli_real_escape_string($db, $status['recipient_id']);
-        $agent = 'bot';
-        $messageType = 'text';
-        $messageText = '';
-        $created_by = $agent;
+        //  BOT status handler
+        if (isset($entry['statuses'])) {
+            $status = $entry['statuses'][0];
+            $wam_id = mysqli_real_escape_string($db, $status['id']);
+            $messageStatus = mysqli_real_escape_string($db, $status['status']);
+            $agent_contact = mysqli_real_escape_string($db, $status['recipient_id']);
+            $agent = 'bot';
+            $messageType = 'text';
+            $messageText = '';
+            // $created_by = $agent;
+            $updated_date = date('Y-m-d H:i:s');
+            $checkQuery = "SELECT id FROM cmp_whatsapp_messages WHERE wam_id = '$wam_id' ";
+            // print_r($checkQuery);
+            $result = mysqli_query($db, $checkQuery);
 
-        $checkQuery = "SELECT id FROM cmp_whatsapp_messages WHERE wam_id = '$wam_id' ";
-        print_r($checkQuery);
-        $result = mysqli_query($db, $checkQuery);
-
-        if (mysqli_num_rows($result) > 0) {
-            $updateQuery = "
+            if (mysqli_num_rows($result) > 0) {
+                $updateQuery = "
                 UPDATE cmp_whatsapp_messages 
                 SET message_status = '$messageStatus',
                 agent='$agent',
                 agent_contact='$agent_contact',
-                message_type='$messageType'
+                message_type='$messageType',
+                updated_date='$updated_date'
                 WHERE wam_id = '$wam_id'
             ";
-            print_r($updateQuery);
-            mysqli_query($db, $updateQuery);
-        } else {
-            // $insertQuery = "
-            //     INSERT INTO cmp_whatsapp_messages 
-            //     (agent, agent_contact, message_type, wam_id, message_body, message_status, created_by, created_date)
-            //     VALUES 
-            //     ('$agent', '$agent_contact', '$messageType', '$wam_id', '$messageText', '$messageStatus', '$created_by', '$created_date')
-            // ";
-            // mysqli_query($db, $insertQuery);
+                mysqli_query($db, $updateQuery);
+            } else {
+                // $insertQuery = "
+                //     INSERT INTO cmp_whatsapp_messages 
+                //     (agent, agent_contact, message_type, wam_id, message_body, message_status, created_by, created_date)
+                //     VALUES 
+                //     ('$agent', '$agent_contact', '$messageType', '$wam_id', '$messageText', '$messageStatus', '$created_by', '$created_date')
+                // ";
+                // mysqli_query($db, $insertQuery);
+            }
         }
     }
-}
 
 
 

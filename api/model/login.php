@@ -52,15 +52,45 @@ class LOGINMODEL extends APIRESPONSE
 
             $db = $this->dbConnect();
             if ($request['loginType'] === "vendor") {
-                $query = "SELECT u.first_name,u.last_name,u.username, u.email,u.password, u.id,urm.role_id ,cmr.role_name FROM cmp_users u JOIN cmp_user_role_mapping urm ON urm.user_id = u.id JOIN cmp_mst_role cmr On cmr.role_id =urm.role_id   WHERE 
-                 u.email = '" . $request['email_id'] . "' 
-                AND u.status = 1";
+                $email = $request['email_id'];
+    
+                // Get user ID
+                $checkUserQuery = "SELECT id FROM cmp_users WHERE email = '$email' AND status = 1";
+                $result = $db->query($checkUserQuery);
+                $user = mysqli_fetch_assoc($result);
+            
+                if (!$user) {
+                    throw new Exception("User not found or inactive.");
+                }
+            
+                $userId = $user['id'];
+            
+                // Check user role
+                $checkRoleQuery = "SELECT role_id FROM cmp_user_role_mapping WHERE user_id = '$userId' AND status = 1";
+                $roleResult = $db->query($checkRoleQuery);
+            
+                if ($roleResult && mysqli_num_rows($roleResult) > 0) {
+                    $roleData = mysqli_fetch_assoc($roleResult);
+            
+                    if ($roleData['role_id'] == 1) { // Super admin not allowed for vendor login
+                        throw new Exception("Super Admin is not allowed to login as Vendor.");
+                    }
+                }
+            
+                //Get vendor details
+                $query = "SELECT 
+                            u.first_name, u.last_name, u.username, u.email, u.password, u.id, 
+                            urm.role_id, cmr.role_name 
+                          FROM cmp_users u 
+                          JOIN cmp_user_role_mapping urm ON urm.user_id = u.id 
+                          JOIN cmp_mst_role cmr ON cmr.role_id = urm.role_id 
+                          WHERE u.email = '$email' AND u.status = 1";
                 // print_r($query);exit;
-             }
-              elseif ($request['loginType'] === "super_admin") {
-                $query = "SELECT u.first_name,u.last_name,u.username, u.password, u.id,urm.role_id,rl.role_name FROM cmp_users u JOIN cmp_user_role_mapping urm ON urm.user_id = u.id JOIN cmp_mst_role rl ON urm.id = rl.role_id   WHERE
-                 u.email = '" . $request['email_id'] . "' AND rl.role_name='" . $request['loginType'] . "'
-                AND u.status = 1";
+            //  }
+            //   elseif ($request['loginType'] === "super_admin") {
+            //     $query = "SELECT u.first_name,u.last_name,u.username, u.password, u.id,urm.role_id,rl.role_name FROM cmp_users u JOIN cmp_user_role_mapping urm ON urm.user_id = u.id JOIN cmp_mst_role rl ON urm.id = rl.role_id   WHERE
+            //      u.email = '" . $request['email_id'] . "' AND rl.role_name='" . $request['loginType'] . "'
+            //     AND u.status = 1";
                 // print_r($query);exit;
 
            
