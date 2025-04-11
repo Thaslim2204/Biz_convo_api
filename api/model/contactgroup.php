@@ -53,6 +53,9 @@ class GROUPMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] === 'selectdelete') {
                     $result = $this->selecteddataDelete($data, $loginData);
                     return $result;
+                } elseif ($urlParam[1] === 'alldelete') {
+                    $result = $this->AllDelete($data, $loginData);
+                    return $result;
                 } elseif ($urlParam[1] === 'groupselectdelete') {
                     $result = $this->selecteddatagroupDelete($data, $loginData);
                     return $result;
@@ -736,82 +739,123 @@ class GROUPMODEL extends APIRESPONSE
 
     private function selecteddataDelete($data, $loginData)
     {
-        // try {
-        //     $ids = $data['deleteId'];
+        try {
+            $ids = $data['deleteId'];
 
-        //     // print_r($data);exit;
-        //     // Check if IDs are provided and valid
-        //     if (empty($ids) || !is_array($ids)) {
-        //         throw new Exception("Invalid input. Please provide an array of IDs.");
-        //     }
+            if (empty($ids) || !is_array($ids)) {
+                throw new Exception("Invalid input. Please provide an array of IDs.");
+            }
 
-        //     $db = $this->dbConnect();
-        //     $deleted = [];
-        //     $failed = [];
+            $db = $this->dbConnect();
+            $deleted = [];
+            $failed = [];
 
-        //     foreach ($ids as $id) {
-        //         // Validate ID
-        //         if (!is_numeric($id)) {
-        //             $failed[] = [
-        //                 'id' => $id,
-        //                 'status' => 400,
-        //                 'message' => 'Invalid ID format'
-        //             ];
-        //             continue;
-        //         }
+            foreach ($ids as $id) {
+                if (!is_numeric($id)) {
+                    $failed[] = [
+                        'id' => $id,
+                        'status' => 400,
+                        'message' => 'Invalid ID format'
+                    ];
+                    continue;
+                }
 
-        //         // Check if the ID exists and is active
-        //         $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact_mapping WHERE id = $id AND status=1 AND created_by ='" . $loginData['user_id'] . "'";
-        //         $result = $db->query($checkIdQuery);
-        //         $rowCount = $result->fetch_assoc()['count'];
+                // Check if group exists and is active
+                $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact WHERE id = $id AND status=1 AND created_by ='" . $loginData['user_id'] . "'";
+                $result = $db->query($checkIdQuery);
+                $rowCount = $result->fetch_assoc()['count'];
 
-        //         if ($rowCount == 0) {
-        //             $failed[] = [
-        //                 'id' => $id,
-        //                 'status' => 400,
-        //                 'message' => 'Group does not exist or is already deleted'
-        //             ];
-        //             continue;
-        //         }
+                if ($rowCount == 0) {
+                    $failed[] = [
+                        'id' => $id,
+                        'status' => 400,
+                        'message' => 'Group does not exist or is already deleted'
+                    ];
+                    continue;
+                }
 
-        //         // Update delete query to set status to 0
-        //         $deleteQuery = "UPDATE cmp_group_contact_mapping SET status = 0 WHERE id = $id AND group_id='".$data['groupId']."'";
-        //         if ($db->query($deleteQuery) === true) {
-        //             $deleted[] = [
-        //                 'id' => $id,
-        //                 'status' => 200,
-        //                 'message' => 'Group details deleted successfully'
-        //             ];
-        //         } else {
-        //             $failed[] = [
-        //                 'id' => $id,
-        //                 'status' => 500,
-        //                 'message' => 'Unable to delete Group details, please try again later'
-        //             ];
-        //         }
-        //     }
+                // 🔹 Step 1: Fetch contact IDs from mapping table
+                $contactIds = [];
+                $mapQuery = "SELECT contact_id FROM cmp_group_contact_mapping WHERE group_id = $id";
+                $mapResult = $db->query($mapQuery);
+                while ($row = $mapResult->fetch_assoc()) {
+                    $contactIds[] = $row['contact_id'];
+                }
 
-        //     $db->close();
+                // 🔹 Step 2: Update contact status in cmp_contact
+                if (!empty($contactIds)) {
+                    $contactIdStr = implode(',', array_map('intval', $contactIds)); // sanitize
+                    $updateContactQuery = "UPDATE cmp_contact SET status = 0 WHERE id IN ($contactIdStr)";
+                    $db->query($updateContactQuery);
+                }
+                if (!empty($contactIds)) {
+                    $contactIdStr = implode(',', array_map('intval', $contactIds)); // sanitize
+                    $updateContactmappingQuery = "UPDATE cmp_group_contact_mapping SET status = 0 WHERE contact_id IN ($contactIdStr)";
+                    $db->query($updateContactmappingQuery);
+                }
 
-        //     return [
-        //         'apiStatus' => [
-        //             'code' => count($failed) > 0 ? 400 : 200,
-        //             'message' => count($failed) > 0 ? 'Some deletions failed' : 'All deletions successful'
-        //         ],
-        //         'deleted' => $deleted,
-        //         'failed' => $failed
-        //     ];
+                // 🔹 Step 3: Update group status
+                $deleteQuery = "UPDATE cmp_group_contact SET status = 0 , active_status= 0 WHERE id = $id ";
+                if ($db->query($deleteQuery) === true) {
+                    $deleted[] = [
+                        'id' => $id,
+                        'status' => 200,
+                        'message' => 'Group and related contacts deleted successfully'
+                    ];
+                } else {
+                    $failed[] = [
+                        'id' => $id,
+                        'status' => 500,
+                        'message' => 'Unable to delete Group details, please try again later'
+                    ];
+                }
+            }
 
-        // } catch (Exception $e) {
-        //     return [
-        //         'apiStatus' => [
-        //             'code' => 500,
-        //             'message' => $e->getMessage()
-        //         ]
-        //     ];
-        // }
+            $db->close();
+
+            return [
+                'apiStatus' => [
+                    'code' => count($failed) > 0 ? 400 : 200,
+                    'message' => count($failed) > 0 ? 'Some deletions failed' : 'All deletions successful'
+                ],
+                'deleted' => $deleted,
+                'failed' => $failed
+            ];
+        } catch (Exception $e) {
+            return [
+                'apiStatus' => [
+                    'code' => 500,
+                    'message' => $e->getMessage()
+                ]
+            ];
+        }
     }
 
+
+    private function AllDelete($data, $loginData) 
+    {
+        try {
+            $db = $this->dbConnect();
+            $userId = $loginData['user_id'];
+    
+            $db->query("UPDATE cmp_contact SET status = 0 WHERE created_by = $userId");
+    
+            return [
+                'apiStatus' => [
+                    'code' => 200,
+                    'message' => 'All contacts marked as deleted successfully.'
+                ]
+            ];
+        } catch (Exception $e) {
+            return [
+                'apiStatus' => [
+                    'code' => 500,
+                    'message' => $e->getMessage()
+                ]
+            ];
+        }
+    }
+    
 
     //Group ative and deactive
     public function Groupactiveachieve($data, $loginData)
@@ -979,7 +1023,7 @@ class GROUPMODEL extends APIRESPONSE
             throw new Exception($e->getMessage());
         }
     }
-    
+
     public function Groupdeactive($data, $loginData)
     {
         try {

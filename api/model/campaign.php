@@ -282,6 +282,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
      */
     public function createCampaign($data, $loginData)
     {
+        // print_r($data);exit;
         $resultArray = array();
         try {
             $db = $this->dbConnect();
@@ -386,6 +387,12 @@ class CAMPAIGNMODEL extends APIRESPONSE
                 throw new Exception("Error inserting campaign: " . mysqli_error($db));
             }
             $campaign_id = mysqli_insert_id($db);
+
+            
+            // Write to file.txt after successful insert
+            $fileData = "CampaignID: $campaign_id | Timezone: $timezone_zoneName | ScheduleAt: $scheduleAt | Status: Scheduled" . PHP_EOL;
+            file_put_contents("file.txt", $fileData, FILE_APPEND); // Appends to the file
+
 
             // Send WhatsApp Message
             $call = new WHATSAPPTEMPLATEMODEL();
@@ -572,6 +579,20 @@ class CAMPAIGNMODEL extends APIRESPONSE
             // print_r($deleteQuery);exit;
 
             if ($db->query($deleteQuery) === true) {
+                 // Update file.txt: remove line with the given CampaignID
+            $filePath = "file.txt";
+            if (file_exists($filePath)) {
+                $lines = file($filePath, FILE_IGNORE_NEW_LINES);
+                $newLines = [];
+
+                foreach ($lines as $line) {
+                    if (strpos($line, "CampaignID: $id ") === false) {
+                        $newLines[] = $line;
+                    }
+                }
+
+                file_put_contents($filePath, implode(PHP_EOL, $newLines) . PHP_EOL);
+            }
                 $db->close();
                 $statusCode = "200";
                 $statusMessage = "Campaign details deleted successfully";

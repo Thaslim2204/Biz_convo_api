@@ -408,7 +408,8 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
     public function templateByID($data, $loginData)
     {
         try {
-            // print_r($loginData);
+
+            // print_r($data);exit;
             $template_id = $data[2];
             if (empty($template_id)) {
                 throw new Exception("Give template id");
@@ -915,7 +916,9 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
     public function sendMessage($data, $loginData, $campaign_id)
     {
         try {
-            $db = $this->dbConnect();
+            // print_r("json_encode");
+            // print_r(json_decode($data));exit;
+            // $db = $this->dbConnect();
             // Fetch contacts and template dynamically
             $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
 
@@ -937,7 +940,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             // Loop through each contact and send the WhatsApp message
             foreach ($contacts as $contact) {
                 // Prepare dynamic components based on the template and the contact data
-                // print_r(json_encode($data['variableIds']));
+               
                 $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'], $template['media_id']);
                 // print_r(json_encode($dynamicComponents, true));
                 // Build the message body
@@ -955,6 +958,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                     ],
                 ];
                 $insertcampaign = "Insert into cmp_campaign_contact(campaign_id,contact_id,created_by,created_date) values('" . $campaign_id . "','" . $contact['contactId'] . "','" . $loginData['user_id'] . "',now())";
+                $db = $this->dbConnect();
                 $db->query($insertcampaign);
                 // Initialize cURL request to send the message
                 $curl = curl_init();

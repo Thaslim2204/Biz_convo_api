@@ -55,6 +55,9 @@ class CONTACTMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] === 'contactselectdelete') {
                     $result = $this->selecteddatacontactDelete($data, $loginData);
                     return $result;
+                } elseif ($urlParam[1] === 'contactassigngroup') {
+                    $result = $this->contactassigngroup($data, $loginData);
+                    return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -806,51 +809,50 @@ JOIN cmp_store s ON c.store_id = s.id
         $resultArray = [];
         try {
             $db = $this->dbConnect();
-
+    
             // Validate file upload
             if (!isset($_FILES['file']) || $_FILES['file']['error'] != UPLOAD_ERR_OK) {
                 throw new Exception("No valid file uploaded.");
             }
-
+    
             $file = $_FILES['file'];
             $filePath = $file['tmp_name'];
             $fileName = $file['name'];
             $fileType = $file['type'];
             $fileSize = $file['size'];
-
+    
             // Allowed file types
             $allowedTypes = [
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // XLSX
-                'application/vnd.ms-excel' // XLS
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/vnd.ms-excel'
             ];
-
+    
             if (!in_array($fileType, $allowedTypes)) {
                 throw new Exception("Invalid file type. Please upload an Excel file.");
             }
-
-            // Check file size (Max: 5MB)
+    
             if ($fileSize > 5 * 1024 * 1024) {
                 throw new Exception("File size exceeds 5MB limit.");
             }
-
-            // Check if file exists before processing
+    
             if (!file_exists($filePath) || empty($filePath)) {
                 throw new Exception("Uploaded file not found.");
             }
-
-            // Read Excel file
+    
             $spreadsheet = IOFactory::load($filePath);
             $sheet = $spreadsheet->getActiveSheet();
             $rows = $sheet->toArray(null, true, true, true);
-
+    
             if (empty($rows) || count($rows) < 2) {
                 throw new Exception("Excel file is empty or invalid format.");
             }
-            //Get the Contact id from the login data
+    
+            unset($rows[1]); // Skip header row
+    
+            // Get Vendor ID
             $user_id = $loginData['user_id'];
             $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
             $result = $db->query($sql);
-
             if ($result) {
                 $row = $result->fetch_assoc();
                 if (!$row || !isset($row['vendor_id'])) {
@@ -860,77 +862,105 @@ JOIN cmp_store s ON c.store_id = s.id
             } else {
                 throw new Exception("Database query failed: " . $db->error);
             }
-
-
-
-            unset($rows[1]); // Remove header row
-            // array_shift($rows);
-
+    
+            // Begin transaction
+            $db->begin_transaction();
+    
             foreach ($rows as $row) {
                 $firstName   = $db->real_escape_string(trim($row['B']));
                 $lastName    = $db->real_escape_string(trim($row['C']));
-                $gender    = $db->real_escape_string(trim($row['D']));
+                $gender      = $db->real_escape_string(trim($row['D']));
                 $email       = $db->real_escape_string(trim($row['E']));
                 $mobile      = $db->real_escape_string(trim($row['F']));
                 $language    = $db->real_escape_string(trim($row['G']));
-                // $dob         = $db->real_escape_string(trim($row['H']));
                 $address     = $db->real_escape_string(trim($row['I']));
                 $loyalty     = $db->real_escape_string(trim($row['J']));
-                // $anniversary = $db->real_escape_string(trim($row['K']));
-                $country   = $db->real_escape_string(trim($row['L']));
-                $storeName   = $db->real_escape_string(trim($row['M']));
+                $country     = $db->real_escape_string(trim($row['L']));
+                $groupName   = $db->real_escape_string(trim($row['M']));
+                $storeName   = $db->real_escape_string(trim($row['N']));
                 $rawDOB = trim($row['H']);
                 $rawAnniversary = trim($row['K']);
-                // **Logging for Debugging**
+    
                 error_log("Processing row: " . json_encode($row));
-
-                // **Validate Required Fields**
+    
                 if (empty($firstName) || empty($storeName) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                     throw new Exception("Invalid or missing required fields in row: " . json_encode($row));
                 }
-                // **Check if Store Exists**
-                $storeQuery = "SELECT id FROM cmp_store WHERE store_name = '$storeName'  LIMIT 1";
+    
+                // Store lookup
+                $storeQuery = "SELECT id FROM cmp_store WHERE store_name = '$storeName' LIMIT 1";
                 $storeResult = $db->query($storeQuery);
-
                 if (!$storeResult || $storeResult->num_rows == 0) {
-                    throw new Exception("Store '$storeName' not found in database.");
+                    throw new Exception("Store '$storeName' not found.");
                 }
-
                 $storeRow = $storeResult->fetch_assoc();
                 $store_id = $storeRow['id'];
-
-                // **Check if Contact Already Exists**
-                $checkQuery = "SELECT id FROM cmp_contact WHERE  mobile = '$mobile' AND created_by = '" . $loginData['user_id'] . "' LIMIT 1";
-                $checkResult = $db->query($checkQuery);
-
-                if ($checkResult->num_rows > 0) {
-                    // Contact already exists, log and continue
-                    error_log("Skipping existing contact: " . json_encode($row));
-                    return; // Replace 'continue' with 'return' to exit the function or handle the flow appropriately
+    
+                // Handle multiple group names
+                $groupNames = array_map('trim', explode(',', $groupName));
+                $groupIds = [];
+                foreach ($groupNames as $gName) {
+                    $escapedGroupName = $db->real_escape_string($gName);
+                    $groupQuery = "SELECT id FROM cmp_group_contact WHERE group_name = '$escapedGroupName' LIMIT 1";
+                    $groupResult = $db->query($groupQuery);
+                    if (!$groupResult || $groupResult->num_rows == 0) {
+                        throw new Exception("Group '$gName' not found.");
+                    }
+                    $groupRow = $groupResult->fetch_assoc();
+                    $groupIds[] = $groupRow['id'];
                 }
-                // Convert dates to MySQL format (YYYY-MM-DD)
-
-                $dob = !empty($rawDOB) ? DateTime::createFromFormat('m/d/Y', $rawDOB)->format('Y-m-d') : null;
-                $anniversary = !empty($rawAnniversary) ? DateTime::createFromFormat('m/d/Y', $rawAnniversary)->format('Y-m-d') : null;
-                // $dob = !empty($rawDOB) ? DateTime::createFromFormat('d-m-Y', $rawDOB)?->format('Y-m-d') : null;
-                // $anniversary = !empty($rawAnniversary) ? DateTime::createFromFormat('d-m-Y', $rawAnniversary)?->format('Y-m-d') : null;
-
-                // Escape for SQL
+    
+                // Check duplicate
+                $checkQuery = "SELECT id FROM cmp_contact WHERE mobile = '$mobile' AND created_by = '$user_id' LIMIT 1";
+                $checkResult = $db->query($checkQuery);
+                if ($checkResult->num_rows > 0) {
+                    $existingRow = $checkResult->fetch_assoc();
+                    $contactId = $existingRow['id'];
+    
+                    foreach ($groupIds as $group_id) {
+                        $mapCheckQuery = "SELECT id FROM cmp_group_contact_mapping WHERE group_id = '$group_id' AND contact_id = '$contactId'";
+                        $mapCheckResult = $db->query($mapCheckQuery);
+                        if ($mapCheckResult->num_rows == 0) {
+                            $insertGroupQuery = "INSERT INTO cmp_group_contact_mapping (group_id, contact_id, created_by, created_date) 
+                                                 VALUES ('$group_id', '$contactId', '$user_id', NOW())";
+                            if (!$db->query($insertGroupQuery)) {
+                                throw new Exception("Error inserting into cmp_group_contact_mapping: " . $db->error);
+                            }
+                        }
+                    }
+                    continue;
+                }
+    
+                // Format dates
+                $dob = !empty($rawDOB) ? DateTime::createFromFormat('d/m/Y', $rawDOB)->format('Y-m-d') : null;
+                $anniversary = !empty($rawAnniversary) ? DateTime::createFromFormat('d/m/Y', $rawAnniversary)->format('Y-m-d') : null;
                 $dob = $dob ? $db->real_escape_string($dob) : null;
                 $anniversary = $anniversary ? $db->real_escape_string($anniversary) : null;
-                // **Insert Data into Database**
+    
+                // Insert contact
                 $insertQuery = "INSERT INTO cmp_contact 
-                                (first_name, last_name,gender, email, mobile, language_code, date_of_birth, address, loyality, anniversary,country, store_id, vendor_id, created_by) 
+                                (first_name, last_name, gender, email, mobile, language_code, date_of_birth, address, loyality, anniversary, country, store_id, vendor_id, created_by) 
                                 VALUES 
-                                ('$firstName', '$lastName', '$gender', '$email', '$mobile', '$language', '$dob', '$address', '$loyalty', '$anniversary','$country', '$store_id', '$vendor_id', '$user_id')";
-                // print_r($insertQuery);
-                // exit;
-                if (!$db->query($insertQuery)) {
+                                ('$firstName', '$lastName', '$gender', '$email', '$mobile', '$language', '$dob', '$address', '$loyalty', '$anniversary', '$country', '$store_id', '$vendor_id', '$user_id')";
+                if ($db->query($insertQuery) === true) {
+                    $contactId = $db->insert_id;
+    
+                    // Insert group mappings
+                    foreach ($groupIds as $group_id) {
+                        $insertGroupQuery = "INSERT INTO cmp_group_contact_mapping (group_id, contact_id, created_by, created_date) 
+                                             VALUES ('$group_id', '$contactId', '$user_id', NOW())";
+                        if (!$db->query($insertGroupQuery)) {
+                            throw new Exception("Error inserting into cmp_group_contact_mapping: " . $db->error);
+                        }
+                    }
+                } else {
                     throw new Exception("Error inserting data: " . $db->error);
                 }
             }
-            // echo "1234";
-
+    
+            // Commit transaction
+            $db->commit();
+    
             $resultArray = [
                 "apiStatus" => [
                     "code"    => "200",
@@ -938,7 +968,11 @@ JOIN cmp_store s ON c.store_id = s.id
                 ]
             ];
         } catch (Exception $e) {
-            error_log("Import Error: " . $e->getMessage()); // Log for debugging
+            // Rollback in case of any error
+            if ($db && $db->errno === 0) {
+                $db->rollback();
+            }
+            error_log("Import Error: " . $e->getMessage());
             $resultArray = [
                 "apiStatus" => [
                     "code"    => "401",
@@ -948,6 +982,9 @@ JOIN cmp_store s ON c.store_id = s.id
         }
         return $resultArray;
     }
+    
+
+
 
 
 
@@ -1062,7 +1099,7 @@ JOIN cmp_store s ON c.store_id = s.id
 
 
             // Set column headers
-            $headers = ['S.No', 'First Name', 'Last Name', 'Gender', 'Email', 'Mobile', 'Language', 'Date of Birth', 'Address', 'Loyality', 'Anniversary Date', 'Country', 'Store Name'];
+            $headers = ['S.No', 'First Name', 'Last Name', 'Gender', 'Email', 'Mobile', 'Language', 'Date of Birth', 'Address', 'Loyality', 'Anniversary Date', 'Country', 'Group Name', 'Store Name'];
             $column = 'A';
             foreach ($headers as $header) {
                 $sheet->setCellValue($column . '1', $header);
@@ -1169,6 +1206,89 @@ JOIN cmp_store s ON c.store_id = s.id
             ];
         }
     }
+    //Assigned group to contact
+    private function contactassigngroup($data, $loginData)
+    {
+        try {
+            $ids = $data['id'];
+            $group_id = $data['group_id'];
+
+            if (empty($ids) || !is_array($ids)) {
+                throw new Exception("Please provide the contact IDs");
+            }
+
+            if (empty($group_id) || !is_numeric($group_id)) {
+                throw new Exception("Please provide the group ID.");
+            }
+
+            $db = $this->dbConnect();
+
+            // Check if group exists
+            $groupCheckQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact WHERE id = $group_id AND status = 1 AND created_by = '" . $loginData['user_id'] . "'";
+            $groupResult = $db->query($groupCheckQuery);
+            $groupExists = $groupResult->fetch_assoc()['count'];
+
+            if ($groupExists == 0) {
+                return [
+                    'apiStatus' => [
+                        'code' => "404",
+                        'status' => "ERROR",
+                        'message' => "Group not found"
+                    ]
+                ];
+            }
+
+            foreach ($ids as $id) {
+                if (!is_numeric($id)) {
+                    throw new Exception("Invalid contact ID: $id");
+                }
+
+                // Check contact exists
+                $checkContactQuery = "SELECT COUNT(*) AS count FROM cmp_contact WHERE id = $id AND status = 1 AND created_by = '" . $loginData['user_id'] . "'";
+                $contactResult = $db->query($checkContactQuery);
+                $contactExists = $contactResult->fetch_assoc()['count'];
+
+                if ($contactExists == 0) {
+                    throw new Exception("Contact ID $id does not exist or is inactive.");
+                }
+
+                // Check already mapped - throw error if true
+                $checkMappingQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact_mapping WHERE contact_id = $id AND group_id = $group_id";
+                $mappingResult = $db->query($checkMappingQuery);
+                $alreadyMapped = $mappingResult->fetch_assoc()['count'];
+
+                if ($alreadyMapped > 0) {
+                    throw new Exception("Contact ID $id is already assigned to this group.");
+                }
+
+                // Insert mapping
+                $insertQuery = "INSERT INTO cmp_group_contact_mapping (group_id, contact_id, created_by) VALUES ($group_id, $id, '" . $loginData['user_id'] . "')";
+                if (!$db->query($insertQuery)) {
+                    throw new Exception("Failed to assign contact ID $id to the group.");
+                }
+            }
+
+            $db->close();
+
+            return [
+                'apiStatus' => [
+                    'code' => "200",
+                    'status' => "OK",
+                    'message' => "Contacts assigned successfully"
+                ]
+            ];
+        } catch (Exception $e) {
+            return [
+                'apiStatus' => [
+                    'code' => "500",
+                    'status' => "ERROR",
+                    'message' => $e->getMessage()
+                ]
+            ];
+        }
+    }
+
+
 
     /**
      * Validate function for tenant create
