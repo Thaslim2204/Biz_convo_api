@@ -25,6 +25,9 @@ class GROUPMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] == "deactive") {
                     $result = $this->Groupdeactive($data, $loginData);
                     return $result;
+                } elseif ($urlParam[1] === 'alldelete') {
+                    $result = $this->AllDelete($data, $loginData);
+                    return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -53,9 +56,7 @@ class GROUPMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] === 'selectdelete') {
                     $result = $this->selecteddataDelete($data, $loginData);
                     return $result;
-                } elseif ($urlParam[1] === 'alldelete') {
-                    $result = $this->AllDelete($data, $loginData);
-                    return $result;
+                
                 } elseif ($urlParam[1] === 'groupselectdelete') {
                     $result = $this->selecteddatagroupDelete($data, $loginData);
                     return $result;
@@ -842,14 +843,14 @@ class GROUPMODEL extends APIRESPONSE
     
             return [
                 'apiStatus' => [
-                    'code' => 200,
+                    'code' => "200",
                     'message' => 'All contacts marked as deleted successfully.'
                 ]
             ];
         } catch (Exception $e) {
             return [
                 'apiStatus' => [
-                    'code' => 500,
+                    'code' => "500",
                     'message' => $e->getMessage()
                 ]
             ];

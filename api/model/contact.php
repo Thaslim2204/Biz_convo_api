@@ -1208,85 +1208,93 @@ JOIN cmp_store s ON c.store_id = s.id
     }
     //Assigned group to contact
     private function contactassigngroup($data, $loginData)
-    {
-        try {
-            $ids = $data['id'];
-            $group_id = $data['group_id'];
+{
+    try {
+        $ids = $data['id'];
+        $group_ids = $data['group_id'];
 
-            if (empty($ids) || !is_array($ids)) {
-                throw new Exception("Please provide the contact IDs");
+        if (empty($ids) || !is_array($ids)) {
+            throw new Exception("Please provide the contact IDs.");
+        }
+
+        if (empty($group_ids) || !is_array($group_ids)) {
+            throw new Exception("Please provide the group IDs.");
+        }
+
+        $db = $this->dbConnect();
+
+        // Validate all group IDs
+        foreach ($group_ids as $group_id) {
+            if (!is_numeric($group_id)) {
+                throw new Exception("Invalid group ID: $group_id");
             }
 
-            if (empty($group_id) || !is_numeric($group_id)) {
-                throw new Exception("Please provide the group ID.");
-            }
-
-            $db = $this->dbConnect();
-
-            // Check if group exists
-            $groupCheckQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact WHERE id = $group_id AND status = 1 AND created_by = '" . $loginData['user_id'] . "'";
+            $groupCheckQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact 
+                                WHERE id = $group_id AND status = 1 AND created_by = '" . $loginData['user_id'] . "'";
             $groupResult = $db->query($groupCheckQuery);
             $groupExists = $groupResult->fetch_assoc()['count'];
 
             if ($groupExists == 0) {
-                return [
-                    'apiStatus' => [
-                        'code' => "404",
-                        'status' => "ERROR",
-                        'message' => "Group not found"
-                    ]
-                ];
+                throw new Exception("Group ID $group_id not found or inactive.");
             }
-
-            foreach ($ids as $id) {
-                if (!is_numeric($id)) {
-                    throw new Exception("Invalid contact ID: $id");
-                }
-
-                // Check contact exists
-                $checkContactQuery = "SELECT COUNT(*) AS count FROM cmp_contact WHERE id = $id AND status = 1 AND created_by = '" . $loginData['user_id'] . "'";
-                $contactResult = $db->query($checkContactQuery);
-                $contactExists = $contactResult->fetch_assoc()['count'];
-
-                if ($contactExists == 0) {
-                    throw new Exception("Contact ID $id does not exist or is inactive.");
-                }
-
-                // Check already mapped - throw error if true
-                $checkMappingQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact_mapping WHERE contact_id = $id AND group_id = $group_id";
-                $mappingResult = $db->query($checkMappingQuery);
-                $alreadyMapped = $mappingResult->fetch_assoc()['count'];
-
-                if ($alreadyMapped > 0) {
-                    throw new Exception("Contact ID $id is already assigned to this group.");
-                }
-
-                // Insert mapping
-                $insertQuery = "INSERT INTO cmp_group_contact_mapping (group_id, contact_id, created_by) VALUES ($group_id, $id, '" . $loginData['user_id'] . "')";
-                if (!$db->query($insertQuery)) {
-                    throw new Exception("Failed to assign contact ID $id to the group.");
-                }
-            }
-
-            $db->close();
-
-            return [
-                'apiStatus' => [
-                    'code' => "200",
-                    'status' => "OK",
-                    'message' => "Contacts assigned successfully"
-                ]
-            ];
-        } catch (Exception $e) {
-            return [
-                'apiStatus' => [
-                    'code' => "500",
-                    'status' => "ERROR",
-                    'message' => $e->getMessage()
-                ]
-            ];
         }
+
+        // Assign each contact to each group
+        foreach ($ids as $id) {
+            if (!is_numeric($id)) {
+                throw new Exception("Invalid contact ID: $id");
+            }
+
+            // Check contact exists
+            $checkContactQuery = "SELECT COUNT(*) AS count FROM cmp_contact 
+                                  WHERE id = $id AND status = 1 AND created_by = '" . $loginData['user_id'] . "'";
+            $contactResult = $db->query($checkContactQuery);
+            $contactExists = $contactResult->fetch_assoc()['count'];
+
+            if ($contactExists == 0) {
+                throw new Exception("Contact ID $id does not exist or is inactive.");
+            }
+
+         foreach ($group_ids as $group_id) {
+    // Check already mapped
+    $checkMappingQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact_mapping 
+                          WHERE contact_id = $id AND group_id = $group_id";
+    $mappingResult = $db->query($checkMappingQuery);
+    $alreadyMapped = $mappingResult->fetch_assoc()['count'];
+
+    if ($alreadyMapped > 0) {
+        // Skip this group, don't throw error
+        continue;
     }
+
+    // Insert mapping
+    $insertQuery = "INSERT INTO cmp_group_contact_mapping (group_id, contact_id, created_by) 
+                    VALUES ($group_id, $id, '" . $loginData['user_id'] . "')";
+    if (!$db->query($insertQuery)) {
+        throw new Exception("Failed to assign Contact ID $id to Group ID $group_id.");
+    }
+}
+        }
+
+        $db->close();
+
+        return [
+            'apiStatus' => [
+                'code' => "200",
+                'status' => "OK",
+                'message' => "Contacts assigned to groups successfully."
+            ]
+        ];
+    } catch (Exception $e) {
+        return [
+            'apiStatus' => [
+                'code' => "500",
+                'status' => "ERROR",
+                'message' => $e->getMessage()
+            ]
+        ];
+    }
+}
 
 
 
