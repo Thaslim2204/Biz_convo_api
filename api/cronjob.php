@@ -87,8 +87,6 @@ class CampaignScheduler
         // 🔍 Get timezone ID from DB
         $timeZoneId = null;
         $zoneQuery = "SELECT id FROM cmp_mst_timezone WHERE timezone_name = '$zoneName'";
-        // print_r($zoneQuery);exit;
-
         $zoneResult = $db->query($zoneQuery);
         if ($zoneResult && $zoneResult->num_rows > 0) {
             $zoneRow = $zoneResult->fetch_assoc();
@@ -104,24 +102,21 @@ class CampaignScheduler
         $diff = $scheduleTime - $currentTime;
 
         if ($diff <= 240 && $diff >= 0) {
-            // if (true) {
-            // 🔍 Get campaign + template data
+            // ✉️ Send Message Logic
             $query = "
                 SELECT t.template_id AS templateId,
                        c.title,
-                       c.group_id,c.restrictLangCode,
+                       c.group_id, c.restrictLangCode,
                        c.schedule_at AS scheduledAt,
                        t.body_data,
-                    gc.group_name
-                    FROM cmp_campaign c
-                    JOIN cmp_whatsapp_templates t ON c.template_id = t.id       
-                    JOIN cmp_group_contact gc ON c.group_id=gc.id
-                     LEFT JOIN cmp_campaign_variable_mapping AS cvm ON c.id = cvm.campaign_id
-                WHERE c.id = $campaignId
+                       gc.group_name
+                  FROM cmp_campaign c
+            JOIN cmp_whatsapp_templates t ON c.template_id = t.id       
+            JOIN cmp_group_contact gc ON c.group_id=gc.id
+            LEFT JOIN cmp_campaign_variable_mapping AS cvm ON c.id = cvm.campaign_id
+            WHERE c.id = $campaignId
             ";
-            // print_r($query);exit;
-            $result =   $db->query($query);
-// print_r( $result->num_rows);exit;
+            $result = $db->query($query);
             if ($result && $result->num_rows > 0) {
                 $row = $result->fetch_assoc();
 
@@ -132,25 +127,23 @@ class CampaignScheduler
                 $scheduledAt = $row['scheduledAt'];
                 $restrictLangCode = $row['restrictLangCode'];
                 $groupName = $row['group_name'];
-                $restrictLangCode = $row['restrictLangCode'];
-                $isRestricted = ($restrictLangCode == 1) ? true : false;
+                $isRestricted = ($restrictLangCode == 1);
 
-                // 🔍 Fetch variable mappings for the campaign
+                // 🔍 Variable Mapping
                 $varQuery = "
-SELECT 
-    cvm.type, 
-    cvm.variable_type_id AS varName, 
-    cvm.variable_value AS varTypeId,
-    mv.variable_name AS varTypeName 
-FROM cmp_campaign_variable_mapping cvm
-LEFT JOIN cmp_mst_variable mv ON cvm.variable_value = mv.id
-WHERE cvm.campaign_id = $campaignId AND cvm.template_id = $templateId AND cvm.group_id = $groupId
-";
-
-                $varResult =  $db->query($varQuery);
-
+                    SELECT 
+                        cvm.type, 
+                        cvm.variable_type_id AS varName, 
+                        cvm.variable_value AS varTypeId,
+                        mv.variable_name AS varTypeName 
+                    FROM cmp_campaign_variable_mapping cvm
+                    LEFT JOIN cmp_mst_variable mv ON cvm.variable_value = mv.id
+                    WHERE cvm.campaign_id = $campaignId 
+                        AND cvm.template_id = $templateId 
+                        AND cvm.group_id = $groupId
+                ";
+                $varResult = $db->query($varQuery);
                 $variableMap = [];
-
                 if ($varResult && $varResult->num_rows > 0) {
                     while ($varRow = $varResult->fetch_assoc()) {
                         $type = $varRow['type'];
@@ -161,7 +154,6 @@ WHERE cvm.campaign_id = $campaignId AND cvm.template_id = $templateId AND cvm.gr
                         if (!isset($variableMap[$type])) {
                             $variableMap[$type] = [];
                         }
-
                         $variableMap[$type][] = [
                             "varName" => $varName,
                             "varValue" => [
@@ -172,21 +164,20 @@ WHERE cvm.campaign_id = $campaignId AND cvm.template_id = $templateId AND cvm.gr
                     }
                 }
 
-                // 💡 Build final variableIds array
                 $variableIds = [];
-
                 foreach ($variableMap as $type => $variables) {
                     $variableIds[] = [
                         "type" => $type,
                         "variables" => $variables
                     ];
                 }
-                //  Build message data
+
+                // 🧱 Build data
                 $dataToSend = [
                     "templateId" => $templateId,
                     "group" => [
                         "groupId" => $groupId,
-                        "groupName" => $groupName // Change if dynamic
+                        "groupName" => $groupName
                     ],
                     "title" => $title,
                     "restrictLangCode" => $isRestricted,
@@ -199,27 +190,23 @@ WHERE cvm.campaign_id = $campaignId AND cvm.template_id = $templateId AND cvm.gr
                     "SendNum" => "",
                     "variableIds" => $variableIds
                 ];
-                // print_r(json_encode($dataToSend));exit;
 
-                // print_r(json_encode($dataToSend));exit;
-                // ✅ Send the structured data
+                // ✅ Send the message
                 $sendStatus = $this->sendMessage($dataToSend, $campaignId, $templateId);
-                // print_r($sendStatus['apiStatus']['code']);exit;
-
-                // 🟢 Send the message
-                // $sendStatus = $this->wt->sendMessage($bodyData, $campaignId, $templateId);
 
                 if ($sendStatus['apiStatus']['code'] === '200') {
-                    // unlink($this->filePath);
-                    // ✅ Remove only current campaign block from file
+                    // ✅ Update send_status to 'sent' in cmp_campaign
+                    $updateStatusSql = "UPDATE cmp_campaign SET send_status = 'Executed' WHERE id = '$campaignId'";
+                    if (!$db->query($updateStatusSql)) {
+                        echo "⚠️ Failed to update send_status in cmp_campaign: " . $db->error . "\n";
+                    } else {
+                        echo "📌 send_status updated to 'sent' for campaign ID $campaignId\n";
+                    }
+
+                    // Remove current block from file.txt
                     $data = file_get_contents($this->filePath);
-
-                    // Use regex to remove the block for the current CampaignID
                     $pattern = "/CampaignID:\s*{$campaignId}\s*\|.*?Status:\s*\w+\s*/s";
-
                     $updatedData = preg_replace($pattern, '', $data);
-
-                    // Write the cleaned data back
                     file_put_contents($this->filePath, trim($updatedData));
 
                     echo "✅ Message sent successfully. CampaignID $campaignId removed from file.txt\n";
@@ -229,10 +216,18 @@ WHERE cvm.campaign_id = $campaignId AND cvm.template_id = $templateId AND cvm.gr
             } else {
                 echo "❌ No campaign/template data found for ID $campaignId.\n";
             }
+        } elseif ($diff < 0) {
+            // ⌛ Schedule expired
+            echo "⚠️ Scheduled time passed for CampaignID $campaignId. Removing from file.\n";
+            $data = file_get_contents($this->filePath);
+            $pattern = "/CampaignID:\s*{$campaignId}\s*\|.*?Status:\s*\w+\s*/s";
+            $updatedData = preg_replace($pattern, '', $data);
+            file_put_contents($this->filePath, trim($updatedData));
         } else {
             echo "🕒 Not time yet. ($diff seconds left)\n";
         }
     }
+
     private function getUsingCampCredentials($data, $loginData)
     {
         try {
@@ -405,7 +400,7 @@ WHERE cvm.campaign_id = $campaignId AND cvm.template_id = $templateId AND cvm.gr
             // $db = $this->dbConnect();
             // Fetch contacts and template dynamically
             $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
-
+            // print_r($fetchResponse);exit;
             // Check if the API response was successful
             if ($fetchResponse['apiStatus']['code'] != "200") {
                 return $fetchResponse; // If there's an error in fetching contacts/template, return the error response.

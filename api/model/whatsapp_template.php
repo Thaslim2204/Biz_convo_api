@@ -916,54 +916,59 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
     public function sendMessage($data, $loginData, $campaign_id)
     {
         try {
-            // print_r("json_encode");
-            // print_r(json_decode($data));exit;
-            // $db = $this->dbConnect();
-            // Fetch contacts and template dynamically
-            $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
-
-            // Check if the API response was successful
-            if ($fetchResponse['apiStatus']['code'] != "200") {
-                return $fetchResponse; // If there's an error in fetching contacts/template, return the error response.
+            if (isset($data['scheduleStatus']) && $data['scheduleStatus'] === true) {
+                // It's a scheduled message, don't send immediately
+                return [
+                    "apiStatus" => [
+                        "code" => "200",
+                        "message" => "Message has been scheduled to be sent at " . $data['scheduledAt'],
+                    ],
+                    "result" => [
+                        "scheduled" => true,
+                        "scheduledAt" => $data['scheduledAt'],
+                        "timezone" => $data['timezone']['zoneName'] ?? 'Not Provided',
+                    ],
+                ];
             }
-
-            // Get contacts and template from the response
-            $contacts = $fetchResponse['result']['contacts'];  // List of contacts
-            $template = $fetchResponse['result']['template'];  // Template data
-
-            // print_r(json_encode());exit;
-            // Initialize arrays to store success and failure recipients
+    
+            // Proceed to send immediately
+            $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
+    
+            if ($fetchResponse['apiStatus']['code'] != "200") {
+                return $fetchResponse;
+            }
+    
+            $contacts = $fetchResponse['result']['contacts'];
+            $template = $fetchResponse['result']['template'];
+    
             $successRecipient = [];
             $failureRecipient = [];
-            $responseArray = []; // To store the response from each individual request
-
-            // Loop through each contact and send the WhatsApp message
+            $responseArray = [];
+    
             foreach ($contacts as $contact) {
-                // Prepare dynamic components based on the template and the contact data
-               
                 $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'], $template['media_id']);
-                // print_r(json_encode($dynamicComponents, true));
-                // Build the message body
+    
                 $body = [
                     'messaging_product' => 'whatsapp',
                     'recipient_type' => 'individual',
-                    'to' => $contact['mobile'],  // The mobile number of the contact
+                    'to' => $contact['mobile'],
                     'type' => 'template',
                     'template' => [
-                        'name' => $template['name'],  // Template name
+                        'name' => $template['name'],
                         'language' => [
-                            'code' => $template['language'],  // Use the contact's language code
+                            'code' => $template['language'],
                         ],
-                        'components' => $dynamicComponents,  // Template components with dynamic data
+                        'components' => $dynamicComponents,
                     ],
                 ];
-                $insertcampaign = "Insert into cmp_campaign_contact(campaign_id,contact_id,created_by,created_date) values('" . $campaign_id . "','" . $contact['contactId'] . "','" . $loginData['user_id'] . "',now())";
+    
+                $insertcampaign = "INSERT INTO cmp_campaign_contact(campaign_id, contact_id, created_by, created_date) VALUES('" . $campaign_id . "','" . $contact['contactId'] . "','" . $loginData['user_id'] . "', NOW())";
                 $db = $this->dbConnect();
                 $db->query($insertcampaign);
-                // Initialize cURL request to send the message
+    
                 $curl = curl_init();
-                $url = $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->phone_no_id . '/' . "messages";
-// print_r( json_encode($body));exit;
+                $url = $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->phone_no_id . '/messages';
+    
                 curl_setopt_array($curl, [
                     CURLOPT_URL => $url,
                     CURLOPT_RETURNTRANSFER => true,
@@ -979,24 +984,21 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                         'Authorization: Bearer ' . $this->fb_auth_token,
                     ],
                 ]);
-
+    
                 $response = curl_exec($curl);
                 $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
                 curl_close($curl);
-
-                // Add the response for this contact
-                $responseArray[] = json_decode($response, true); // Storing each response as an associative array
-
-                // Check if the request was successful
+    
+                $responseArray[] = json_decode($response, true);
+    
                 if ($httpCode == 200) {
                     $successRecipient[] = $contact['mobile'];
                 } else {
                     $failureRecipient[] = $contact['mobile'];
                 }
             }
-
-            // Prepare response data for success and failure
-            $responses = [
+    
+            return [
                 "apiStatus" => [
                     "code" => "200",
                     "message" => "WhatsApp template message executed successfully",
@@ -1004,11 +1006,10 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                 "result" => [
                     "successRecipients" => $successRecipient,
                     "failureRecipients" => $failureRecipient,
-                    "apiResponse" => $responseArray, // Return array of responses for all contacts
+                    "apiResponse" => $responseArray,
                 ],
             ];
-
-            return $responses;
+    
         } catch (Exception $e) {
             return [
                 "apiStatus" => [
@@ -1018,6 +1019,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             ];
         }
     }
+    
 
     /**
      * Prepare dynamic components based on the template and contact data

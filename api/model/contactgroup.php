@@ -800,7 +800,7 @@ class GROUPMODEL extends APIRESPONSE
                 if ($db->query($deleteQuery) === true) {
                     $deleted[] = [
                         'id' => $id,
-                        'status' => 200,
+                        'status' => "200",
                         'message' => 'Group and related contacts deleted successfully'
                     ];
                 } else {
@@ -816,7 +816,7 @@ class GROUPMODEL extends APIRESPONSE
 
             return [
                 'apiStatus' => [
-                    'code' => count($failed) > 0 ? 400 : 200,
+                    'code' => count($failed) > 0 ? "400" : "200",
                     'message' => count($failed) > 0 ? 'Some deletions failed' : 'All deletions successful'
                 ],
                 'deleted' => $deleted,
@@ -1252,7 +1252,7 @@ class GROUPMODEL extends APIRESPONSE
                 if ($db->query($deleteQuery) === true) {
                     $deleted[] = [
                         'id' => $id,
-                        'status' => 200,
+                        'status' => "200",
                         'message' => 'Group details deleted successfully'
                     ];
                 } else {
@@ -1268,7 +1268,7 @@ class GROUPMODEL extends APIRESPONSE
 
             return [
                 'apiStatus' => [
-                    'code' => count($failed) > 0 ? 400 : 200,
+                    'code' => count($failed) > 0 ? "400" : "200",
                     'message' => count($failed) > 0 ? 'Some deletions failed' : 'All deletions successful'
                 ],
                 'deleted' => $deleted,

@@ -138,6 +138,7 @@ class CONTACTMODEL extends APIRESPONSE
     c.address, 
     c.loyality, 
     c.country, 
+     c.sales_amount, 
     c.language_code, 
     c.created_by, 
     c.created_date, 
@@ -186,6 +187,7 @@ JOIN cmp_store s ON c.store_id = s.id
                             "DOB" => $row['date_of_birth'],
                             "anniversary" => $row['anniversary'],
                             "loyality" => $row['loyality'],
+                            "salesAmount" => $row['sales_amount'],
                             "address" => $row['address']
                         ],
                         "groupDetails" => [] // Initialize group details as an array
@@ -283,6 +285,7 @@ JOIN cmp_store s ON c.store_id = s.id
             c.address, 
             c.loyality, 
             c.country, 
+            c.sales_amount, 
             c.language_code, 
             c.created_by, 
             c.created_date, 
@@ -325,6 +328,7 @@ JOIN cmp_store s ON c.store_id = s.id
                                 "DOB" => $row['date_of_birth'],
                                 "anniversary" => $row['anniversary'],
                                 "loyality" => $row['loyality'],
+                                "salesAmount" => $row['sales_amount'],
                                 "address" => $row['address']
                             ],
                             "groupDetails" => [] // Initialize as an empty array
@@ -435,7 +439,7 @@ JOIN cmp_store s ON c.store_id = s.id
             $result = mysqli_query($db, $sql);
 
             if (!$result || mysqli_num_rows($result) === 0) {
-                throw new Exception('Invalid Contact ID');
+                throw new Exception('Invalid Store ID');
             }
             // Validate group name and ID
             foreach ($data['groupdetails'] as $group) {
@@ -454,7 +458,7 @@ JOIN cmp_store s ON c.store_id = s.id
             $anniversary = !empty($data['otherInformation']['anniversary']) ? DateTime::createFromFormat('m/d/Y', $data['otherInformation']['anniversary'])->format('Y-m-d') : null;
 
             $sql = "INSERT INTO cmp_contact 
-        (vendor_id, store_id, first_name, last_name, mobile, gender,email, date_of_birth, anniversary, address, loyality, country, language_code, created_by, created_date) 
+        (vendor_id, store_id, first_name, last_name, mobile, gender,email, date_of_birth, anniversary, address, loyality, country,sales_amount, language_code, created_by, created_date) 
         VALUES 
         ('$vendor_id', 
          '" . $data['storeId'] . "', 
@@ -468,9 +472,12 @@ JOIN cmp_store s ON c.store_id = s.id
          '" . $data['otherInformation']['address'] . "', 
          '" . $data['otherInformation']['loyality'] . "', 
          '" . $data['country'] . "', 
+          '" . $data['otherInformation']['saleAmount'] . "',
          '" . $data['language'] . "', 
          '" . $loginData['user_id'] . "', 
          NOW())";
+
+        //  print_r($sql);exit;    
             if ($db->query($sql) === true) {
                 $contactId = $db->insert_id;
 
@@ -589,6 +596,7 @@ JOIN cmp_store s ON c.store_id = s.id
                     address = '" . $data['otherInformation']['address'] . "',
                     loyality = '" . $data['otherInformation']['loyality'] . "',
                     country = '" . $data['country'] . "',
+                    sales_amount = '" .  $data['otherInformation']['saleAmount'] . "',
                     language_code = '" . $data['language'] . "',
                     updated_by = '" . $loginData['user_id'] . "',
                     updated_date = NOW()
@@ -878,6 +886,7 @@ JOIN cmp_store s ON c.store_id = s.id
                 $country     = $db->real_escape_string(trim($row['L']));
                 $groupName   = $db->real_escape_string(trim($row['M']));
                 $storeName   = $db->real_escape_string(trim($row['N']));
+                $saleAmount  = $db->real_escape_string(trim($row['O']));
                 $rawDOB = trim($row['H']);
                 $rawAnniversary = trim($row['K']);
     
@@ -939,9 +948,9 @@ JOIN cmp_store s ON c.store_id = s.id
     
                 // Insert contact
                 $insertQuery = "INSERT INTO cmp_contact 
-                                (first_name, last_name, gender, email, mobile, language_code, date_of_birth, address, loyality, anniversary, country, store_id, vendor_id, created_by) 
+                                (first_name, last_name, gender, email, mobile, language_code, date_of_birth, address, loyality, anniversary, country,sales_amount, store_id, vendor_id, created_by) 
                                 VALUES 
-                                ('$firstName', '$lastName', '$gender', '$email', '$mobile', '$language', '$dob', '$address', '$loyalty', '$anniversary', '$country', '$store_id', '$vendor_id', '$user_id')";
+                                ('$firstName', '$lastName', '$gender', '$email', '$mobile', '$language', '$dob', '$address', '$loyalty', '$anniversary', '$country','$saleAmount', '$store_id', '$vendor_id', '$user_id')";
                 if ($db->query($insertQuery) === true) {
                     $contactId = $db->insert_id;
     
@@ -1015,7 +1024,7 @@ JOIN cmp_store s ON c.store_id = s.id
                 throw new Exception("Database query failed: " . $db->error);
             }
             // Set column headers
-            $headers = ['S.No',  'First Name', 'Last Name',  'Gender', 'Email', 'Mobile', 'language', 'Date of Birth', 'Address', 'loyality', 'Anniversary Date', 'Country', 'Store Name'];
+            $headers = ['S.No',  'First Name', 'Last Name',  'Gender', 'Email', 'Mobile', 'language', 'Date of Birth', 'Address', 'loyality', 'Anniversary Date', 'Country', 'Store Name','Sale Amount'];
             $column = 'A';
             foreach ($headers as $header) {
                 $sheet->setCellValue($column . '1', $header);
@@ -1037,6 +1046,7 @@ JOIN cmp_store s ON c.store_id = s.id
                     c.address,
                     c.loyality,
                     c.country,
+                    c.sale_amount,
 
                     s.store_name
 
@@ -1068,6 +1078,7 @@ JOIN cmp_store s ON c.store_id = s.id
                 $sheet->setCellValue($column++ . $rowIndex, $row['anniversary']);
                 $sheet->setCellValue($column++ . $rowIndex, $row['country']);
                 $sheet->setCellValue($column++ . $rowIndex, $row['store_name']);
+                $sheet->setCellValue($column++ . $rowIndex, $row['sale_amount']);
                 $rowIndex++;
             }
 
@@ -1099,7 +1110,7 @@ JOIN cmp_store s ON c.store_id = s.id
 
 
             // Set column headers
-            $headers = ['S.No', 'First Name', 'Last Name', 'Gender', 'Email', 'Mobile', 'Language', 'Date of Birth', 'Address', 'Loyality', 'Anniversary Date', 'Country', 'Group Name', 'Store Name'];
+            $headers = ['S.No', 'First Name', 'Last Name', 'Gender', 'Email', 'Mobile', 'Language', 'Date of Birth', 'Address', 'Loyality', 'Anniversary Date', 'Country', 'Group Name', 'Store Name', 'Sale Amount'];
             $column = 'A';
             foreach ($headers as $header) {
                 $sheet->setCellValue($column . '1', $header);
@@ -1175,7 +1186,7 @@ JOIN cmp_store s ON c.store_id = s.id
                 if ($db->query($deleteQuery) === true) {
                     $deleted[] = [
                         'id' => $id,
-                        'status' => 200,
+                        'status' => "200",
                         'message' => 'Group details deleted successfully'
                     ];
                 } else {
@@ -1191,7 +1202,7 @@ JOIN cmp_store s ON c.store_id = s.id
 
             return [
                 'apiStatus' => [
-                    'code' => count($failed) > 0 ? 400 : 200,
+                    'code' => count($failed) > 0 ? "400" : "200",
                     'message' => count($failed) > 0 ? 'Some deletions failed' : 'All deletions successful'
                 ],
                 'deleted' => $deleted,

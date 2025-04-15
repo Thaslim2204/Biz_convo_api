@@ -135,7 +135,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
             $recordCount = $countRow['totalCount']; // Total record count
 
             // Query to fetch vendors and their contact persons0
-            $queryService = "SELECT c.id,c.title,c.template_id,c.created_date,c.active_status,c.schedule_at,c.status AS campaignStatus,wt.template_name,wt.language
+            $queryService = "SELECT c.id,c.title,c.template_id,c.created_date,c.active_status,c.schedule_at,c.send_status,c.status AS campaignStatus,wt.template_name,wt.language
                  FROM cmp_campaign AS c 
                  JOIN cmp_whatsapp_templates AS wt ON wt.id = c.template_id
                  WHERE c.status = 1 AND wt.status=1 AND c.active_status=1 AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
@@ -154,6 +154,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
                         "title" => $row['title'],
                         "templateName" => $row['template_name'],
                         "tempLang" => $row['language'],
+                        "sendStatus" => $row['send_status'],
                         "activeStatus" => $row['active_status'],
                         "createdDate" => $row['created_date'],
                         "scheduleAt" => $row['schedule_at'],
@@ -217,7 +218,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
             }
 
             $db = $this->dbConnect();
-            $sql = "SELECT c.id,c.title,c.template_id,c.created_date,c.active_status,c.schedule_at,c.status AS campaignStatus,wt.template_name,wt.language
+            $sql = "SELECT c.id,c.title,c.template_id,c.created_date,c.active_status,c.schedule_at,c.send_status,c.status AS campaignStatus,wt.template_name,wt.language
                  FROM cmp_campaign AS c 
                  JOIN cmp_whatsapp_templates AS wt ON wt.id = c.template_id
                       WHERE c.id = $id AND c.status = 1 AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData) . " 
@@ -235,6 +236,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
                         "title" => $row['title'],
                         "templateName" => $row['template_name'],
                         "tempLang" => $row['language'],
+                        "sendStatus" => $row['send_status'],
                         "activeStatus" => $row['active_status'],
                         "createdDate" => $row['created_date'],
                         "scheduleAt" => $row['schedule_at'],
@@ -380,23 +382,38 @@ class CAMPAIGNMODEL extends APIRESPONSE
             $sendNum = mysqli_real_escape_string($db, $data['SendNum']);
             $createdBy = mysqli_real_escape_string($db, $loginData['user_id']);
 
-            $sql = "INSERT INTO cmp_campaign (group_id, template_id, title, restrictLangCode, timezone, schedule_at, send_num, created_by) 
-        VALUES ('$groupId', '$template_id', '$title', '$restrictLangCode', '$timezone_zoneName', '$scheduleAt', '$sendNum', '$createdBy')";
+            $sql = "INSERT INTO cmp_campaign (group_id, template_id, title, restrictLangCode, timezone, schedule_at, send_status,send_num, created_by) 
+        VALUES ('$groupId', '$template_id', '$title', '$restrictLangCode', '$timezone_zoneName', '$scheduleAt','schedule' ,'$sendNum', '$createdBy')";
 
             if (!mysqli_query($db, $sql)) {
                 throw new Exception("Error inserting campaign: " . mysqli_error($db));
             }
             $campaign_id = mysqli_insert_id($db);
 
-            
+
             // Write to file.txt after successful insert
-            $fileData = "CampaignID: $campaign_id | Timezone: $timezone_zoneName | ScheduleAt: $scheduleAt | Status: Scheduled" . PHP_EOL;
-            file_put_contents("file.txt", $fileData, FILE_APPEND); // Appends to the file
+            if ($data['scheduleStatus'] === true) {
+                $fileData = "CampaignID: $campaign_id | Timezone: $timezone_zoneName | ScheduleAt: $scheduleAt | Status: Scheduled" . PHP_EOL;
+                file_put_contents("file.txt", $fileData, FILE_APPEND); // Appends to the file
+            }
 
 
             // Send WhatsApp Message
             $call = new WHATSAPPTEMPLATEMODEL();
-            $call->sendMessage($data, $loginData, $campaign_id);
+            $resulthhtp= $call->sendMessage($data, $loginData, $campaign_id);
+            // print_r($resulthhtp['apiStatus']['code']);exit;
+
+            if ($resulthhtp['apiStatus']['code'] !== "200") {
+                throw new Exception("Message sending failed: " . $resulthhtp['apiStatus']['message']);
+            }
+
+            // If not scheduled, update the send_status to 'sent'
+            if (empty($data['scheduleStatus']) || $data['scheduleStatus'] === false) {
+                $updateSql = "UPDATE cmp_campaign SET send_status = 'Executed' WHERE id = '$campaign_id'";
+                if (!mysqli_query($db, $updateSql)) {
+                    throw new Exception("Error updating send status: " . mysqli_error($db));
+                }
+            }
 
             foreach ($data['variableIds'] as $variable) {
                 if (isset($variable['type'])) {
@@ -424,7 +441,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
             return [
                 "apiStatus" => [
                     "code"    => "200",
-                    "message" => "Campaign successfully created.",
+                    "message" => "Campaign successfully created and message sent.",
                 ],
             ];
         } catch (Exception $e) {
@@ -468,7 +485,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
 
             // Fetch campaign details with contacts
             $queryService = "SELECT DISTINCT 
-            c.id, c.title, c.template_id, c.created_date, 
+            c.id, c.title, c.template_id, c.created_date, c.send_status,
             c.active_status, c.schedule_at, c.status AS campaignStatus, 
             wt.template_name, wt.language, 
             con.first_name, con.last_name, con.mobile, con.email,
@@ -496,6 +513,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
                     "campaignName" => $row['title'],
                     "tempalte_language" => $row['language'],
                     "scheduleAt" => $row['schedule_at'],
+                     "sendStatus" => $row['send_status'],
                     "status" => $row['campaignStatus']
                 ];
 
@@ -579,20 +597,20 @@ class CAMPAIGNMODEL extends APIRESPONSE
             // print_r($deleteQuery);exit;
 
             if ($db->query($deleteQuery) === true) {
-                 // Update file.txt: remove line with the given CampaignID
-            $filePath = "file.txt";
-            if (file_exists($filePath)) {
-                $lines = file($filePath, FILE_IGNORE_NEW_LINES);
-                $newLines = [];
+                // Update file.txt: remove line with the given CampaignID
+                $filePath = "file.txt";
+                if (file_exists($filePath)) {
+                    $lines = file($filePath, FILE_IGNORE_NEW_LINES);
+                    $newLines = [];
 
-                foreach ($lines as $line) {
-                    if (strpos($line, "CampaignID: $id ") === false) {
-                        $newLines[] = $line;
+                    foreach ($lines as $line) {
+                        if (strpos($line, "CampaignID: $id ") === false) {
+                            $newLines[] = $line;
+                        }
                     }
-                }
 
-                file_put_contents($filePath, implode(PHP_EOL, $newLines) . PHP_EOL);
-            }
+                    file_put_contents($filePath, implode(PHP_EOL, $newLines) . PHP_EOL);
+                }
                 $db->close();
                 $statusCode = "200";
                 $statusMessage = "Campaign details deleted successfully";
@@ -1193,13 +1211,13 @@ class CAMPAIGNMODEL extends APIRESPONSE
                 if ($db->query($deleteQuery) === true) {
                     $deleted[] = [
                         'id' => $id,
-                        'status' => 200,
+                        'status' => "200",
                         'message' => 'Group details deleted successfully'
                     ];
                 } else {
                     $failed[] = [
                         'id' => $id,
-                        'status' => 500,
+                        'status' => "500",
                         'message' => 'Unable to delete Group details, please try again later'
                     ];
                 }
@@ -1209,7 +1227,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
 
             return [
                 'apiStatus' => [
-                    'code' => count($failed) > 0 ? 400 : 200,
+                    'code' => count($failed) > 0 ? "400" : "200",
                     'message' => count($failed) > 0 ? 'Some deletions failed' : 'All deletions successful'
                 ],
                 'deleted' => $deleted,
