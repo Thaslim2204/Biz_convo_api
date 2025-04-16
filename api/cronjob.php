@@ -33,16 +33,29 @@ class CampaignScheduler
     {
         // print_r($loginData);
         $db = $this->dbConnect();
+        // Get the Contact id from the login data
+        $user_id = $loginData['user_id'];
+        $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
+        $result = $db->query($sql);
+
+        if ($result) {
+            $row = $result->fetch_assoc();
+            if (!$row || !isset($row['vendor_id'])) {
+                throw new Exception("Vendor ID not found for user ID: $user_id");
+            }
+            $vendor_id = $row['vendor_id'];
+        } else {
+            throw new Exception("Database query failed: " . $db->error);
+        }
 
         $this->facebook_base_url = "https://graph.facebook.com";
         $this->facebook_base_version = "v22.0";
 
         //get private tokens from DB
-        $sql = "SELECT whatsapp_business_acc_id, phone_no_id, access_token , app_id from cmp_vendor_fb_credentials where vendor_id = '1' and status = 1";
+        $sql = "SELECT whatsapp_business_acc_id, phone_no_id, access_token , app_id from cmp_vendor_fb_credentials where vendor_id = $vendor_id and status = 1";
         $result = $db->query($sql);
         $fbData = mysqli_fetch_assoc($result);
         // print_r($fbData);exit;
-
         if ($fbData) {
             $this->whatsapp_business_id = $fbData['whatsapp_business_acc_id'];
             $this->phone_no_id = $fbData['phone_no_id'];
@@ -84,6 +97,14 @@ class CampaignScheduler
             return;
         }
 
+        // ✅ Dynamically set the timezone
+        if (in_array($zoneName, timezone_identifiers_list())) {
+            date_default_timezone_set($zoneName);
+        } else {
+            echo "⚠️ Invalid timezone '$zoneName'. Falling back to Asia/Kolkata\n";
+            date_default_timezone_set("Asia/Kolkata");
+        }
+
         // 🔍 Get timezone ID from DB
         $timeZoneId = null;
         $zoneQuery = "SELECT id FROM cmp_mst_timezone WHERE timezone_name = '$zoneName'";
@@ -104,18 +125,18 @@ class CampaignScheduler
         if ($diff <= 240 && $diff >= 0) {
             // ✉️ Send Message Logic
             $query = "
-                SELECT t.template_id AS templateId,
-                       c.title,
-                       c.group_id, c.restrictLangCode,
-                       c.schedule_at AS scheduledAt,
-                       t.body_data,
-                       gc.group_name
-                  FROM cmp_campaign c
-            JOIN cmp_whatsapp_templates t ON c.template_id = t.id       
-            JOIN cmp_group_contact gc ON c.group_id=gc.id
-            LEFT JOIN cmp_campaign_variable_mapping AS cvm ON c.id = cvm.campaign_id
-            WHERE c.id = $campaignId
-            ";
+            SELECT t.template_id AS templateId,
+                   c.title,
+                   c.group_id, c.restrictLangCode,
+                   c.schedule_at AS scheduledAt,
+                   t.body_data,
+                   gc.group_name
+              FROM cmp_campaign c
+        JOIN cmp_whatsapp_templates t ON c.template_id = t.id       
+        JOIN cmp_group_contact gc ON c.group_id=gc.id
+        LEFT JOIN cmp_campaign_variable_mapping AS cvm ON c.id = cvm.campaign_id
+        WHERE c.id = $campaignId
+        ";
             $result = $db->query($query);
             if ($result && $result->num_rows > 0) {
                 $row = $result->fetch_assoc();
@@ -131,17 +152,17 @@ class CampaignScheduler
 
                 // 🔍 Variable Mapping
                 $varQuery = "
-                    SELECT 
-                        cvm.type, 
-                        cvm.variable_type_id AS varName, 
-                        cvm.variable_value AS varTypeId,
-                        mv.variable_name AS varTypeName 
-                    FROM cmp_campaign_variable_mapping cvm
-                    LEFT JOIN cmp_mst_variable mv ON cvm.variable_value = mv.id
-                    WHERE cvm.campaign_id = $campaignId 
-                        AND cvm.template_id = $templateId 
-                        AND cvm.group_id = $groupId
-                ";
+                SELECT 
+                    cvm.type, 
+                    cvm.variable_type_id AS varName, 
+                    cvm.variable_value AS varTypeId,
+                    mv.variable_name AS varTypeName 
+                FROM cmp_campaign_variable_mapping cvm
+                LEFT JOIN cmp_mst_variable mv ON cvm.variable_value = mv.id
+                WHERE cvm.campaign_id = $campaignId 
+                    AND cvm.template_id = $templateId 
+                    AND cvm.group_id = $groupId
+            ";
                 $varResult = $db->query($varQuery);
                 $variableMap = [];
                 if ($varResult && $varResult->num_rows > 0) {
@@ -192,7 +213,7 @@ class CampaignScheduler
                 ];
 
                 // ✅ Send the message
-                $sendStatus = $this->sendMessage($dataToSend, $campaignId, $templateId);
+                $sendStatus = $this->sendMessage($dataToSend, $campaignId, $templateId, "campaign");
 
                 if ($sendStatus['apiStatus']['code'] === '200') {
                     // ✅ Update send_status to 'sent' in cmp_campaign
@@ -216,17 +237,19 @@ class CampaignScheduler
             } else {
                 echo "❌ No campaign/template data found for ID $campaignId.\n";
             }
-        } elseif ($diff < 0) {
-            // ⌛ Schedule expired
-            echo "⚠️ Scheduled time passed for CampaignID $campaignId. Removing from file.\n";
-            $data = file_get_contents($this->filePath);
-            $pattern = "/CampaignID:\s*{$campaignId}\s*\|.*?Status:\s*\w+\s*/s";
-            $updatedData = preg_replace($pattern, '', $data);
-            file_put_contents($this->filePath, trim($updatedData));
+            // } elseif ($diff < -240) {
+            // } elseif ($diff < 0) {
+            //     // ⌛ Schedule expired
+            //     echo "⚠️ Scheduled time passed for CampaignID $campaignId. Removing from file.\n";
+            //     $data = file_get_contents($this->filePath);
+            //     $pattern = "/CampaignID:\s*{$campaignId}\s*\|.*?Status:\s*\w+\s*/s";
+            //     $updatedData = preg_replace($pattern, '', $data);
+            //     file_put_contents($this->filePath, trim($updatedData));
         } else {
             echo "🕒 Not time yet. ($diff seconds left)\n";
         }
     }
+
 
     private function getUsingCampCredentials($data, $loginData)
     {
@@ -392,57 +415,65 @@ class CampaignScheduler
     //     }
     // }
 
-    public function sendMessage($data, $loginData, $campaign_id)
+    public function sendMessage($data, $loginData, $campaign_id, $iscampaign)
     {
         try {
-            // print_r("json_encode");
-            // print_r(json_decode($data));exit;
-            // $db = $this->dbConnect();
-            // Fetch contacts and template dynamically
-            $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
-            // print_r($fetchResponse);exit;
-            // Check if the API response was successful
-            if ($fetchResponse['apiStatus']['code'] != "200") {
-                return $fetchResponse; // If there's an error in fetching contacts/template, return the error response.
+
+
+            $this->fbCredentials($loginData);
+            if (isset($data['scheduleStatus']) && $data['scheduleStatus'] === true) {
+                // It's a scheduled message, don't send immediately
+                return [
+                    "apiStatus" => [
+                        "code" => "200",
+                        "message" => "Message has been scheduled to be sent at " . $data['scheduledAt'],
+                    ],
+                    "result" => [
+                        "scheduled" => true,
+                        "scheduledAt" => $data['scheduledAt'],
+                        "timezone" => $data['timezone']['zoneName'] ?? 'Not Provided',
+                    ],
+                ];
             }
 
-            // Get contacts and template from the response
-            $contacts = $fetchResponse['result']['contacts'];  // List of contacts
-            $template = $fetchResponse['result']['template'];  // Template data
+            // Proceed to send immediately
+            $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
 
-            ;
-            // Initialize arrays to store success and failure recipients
+            if ($fetchResponse['apiStatus']['code'] != "200") {
+                return $fetchResponse;
+            }
+
+            $contacts = $fetchResponse['result']['contacts'];
+            $template = $fetchResponse['result']['template'];
+
             $successRecipient = [];
             $failureRecipient = [];
-            $responseArray = []; // To store the response from each individual request
+            $responseArray = [];
 
-            // Loop through each contact and send the WhatsApp message
             foreach ($contacts as $contact) {
-                // Prepare dynamic components based on the template and the contact data
-                $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'], $template['media_id']);
+                $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'], $template['media_id'], $iscampaign, $campaign_id);
 
-
-                // Build the message body
                 $body = [
                     'messaging_product' => 'whatsapp',
                     'recipient_type' => 'individual',
-                    'to' => $contact['mobile'],  // The mobile number of the contact
+                    'to' => $contact['mobile'],
                     'type' => 'template',
                     'template' => [
-                        'name' => $template['name'],  // Template name
+                        'name' => $template['name'],
                         'language' => [
-                            'code' => $template['language'],  // Use the contact's language code
+                            'code' => $template['language'],
                         ],
-                        'components' => $dynamicComponents,  // Template components with dynamic data
+                        'components' => $dynamicComponents,
                     ],
                 ];
-                // $insertcampaign = "Insert into cmp_campaign_contact(campaign_id,contact_id,created_by,created_date) values('" . $campaign_id . "','" . $contact['contactId'] . "','" . $loginData['user_id'] . "',now())";
-                // $db = $this->dbConnect();
-                // $db->query($insertcampaign);
-                // Initialize cURL request to send the message
+
+                $insertcampaign = "INSERT INTO cmp_campaign_contact(campaign_id, contact_id, created_by, created_date) VALUES('" . $campaign_id . "','" . $contact['contactId'] . "','" . $loginData['user_id'] . "', NOW())";
+                $db = $this->dbConnect();
+                $db->query($insertcampaign);
+
                 $curl = curl_init();
-                $url = $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->phone_no_id . '/' . "messages";
-                // print_r( json_encode($body));exit;
+                $url = $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->phone_no_id . '/messages';
+
                 curl_setopt_array($curl, [
                     CURLOPT_URL => $url,
                     CURLOPT_RETURNTRANSFER => true,
@@ -463,10 +494,8 @@ class CampaignScheduler
                 $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
                 curl_close($curl);
 
-                // Add the response for this contact
-                $responseArray[] = json_decode($response, true); // Storing each response as an associative array
+                $responseArray[] = json_decode($response, true);
 
-                // Check if the request was successful
                 if ($httpCode == 200) {
                     $successRecipient[] = $contact['mobile'];
                 } else {
@@ -474,8 +503,7 @@ class CampaignScheduler
                 }
             }
 
-            // Prepare response data for success and failure
-            $responses = [
+            return [
                 "apiStatus" => [
                     "code" => "200",
                     "message" => "WhatsApp template message executed successfully",
@@ -483,11 +511,9 @@ class CampaignScheduler
                 "result" => [
                     "successRecipients" => $successRecipient,
                     "failureRecipients" => $failureRecipient,
-                    "apiResponse" => $responseArray, // Return array of responses for all contacts
+                    "apiResponse" => $responseArray,
                 ],
             ];
-
-            return $responses;
         } catch (Exception $e) {
             return [
                 "apiStatus" => [
@@ -497,7 +523,12 @@ class CampaignScheduler
             ];
         }
     }
-    private function prepareDynamicComponents($templateComponents, $contact, $variableIds, $mediaId)
+
+
+    /**
+     * Prepare dynamic components based on the template and contact data
+     */
+    private function prepareDynamicComponents($templateComponents, $contact, $variableIds, $mediaId, $iscampaign, $campaign_id)
     {
         // print_r((json_encode($mediaId)));
         // exit;
@@ -505,7 +536,7 @@ class CampaignScheduler
         // print_r($variableIds['body']);exit;
         $dynamicComponents = [];
         $headerHasVariable = false;
-        // print_r(json_encode($templateComponents));exit;
+
         // Loop through each component to adjust dynamically based on the type and contact data
         foreach ($templateComponents as $component) {
             // Debugging: Check the component structure
@@ -524,7 +555,7 @@ class CampaignScheduler
                     } else if ($component['format'] != 'TEXT') {
                         // echo "csdkf";exit;
 
-                        $dynamicComponents[] = $this->prepareHeaderMediaComponent($component, $contact, $mediaId);
+                        $dynamicComponents[] = $this->prepareHeaderMediaComponent($component, $contact, $mediaId, $iscampaign, $campaign_id);
                     }
                     break;
 
@@ -594,9 +625,18 @@ class CampaignScheduler
     }
 
 
-    private function prepareHeaderMediaComponent($component, $contact, $mediaId)
+    private function prepareHeaderMediaComponent($component, $contact, $mediaId, $iscampaign, $campaign_id)
     {
-        // print_r($component);exit;
+        $db = $this->dbConnect();
+        $dbmediaId = null; // Initialize the variable
+        if ($iscampaign === "campaign") {
+            $sql = "SELECT media_id,media_url FROM cmp_campaign WHERE id='" . $campaign_id . "' AND status=1";
+            $result = $db->query($sql);
+            if ($result && $result->num_rows > 0) {
+                $row = $result->fetch_assoc();
+                $dbmediaId = $row['media_id'];
+            }
+        }
         // Assuming the header media is an image (you can extend this for other media types like video)
         if (isset($component['format'])) {
             return [
@@ -606,7 +646,8 @@ class CampaignScheduler
                         'type' => $component['format'],
                         strtolower($component['format']) => [
                             // 'link' => $component['example']['header_handle'][0]
-                            "id" => $mediaId
+                            "id" => $dbmediaId ? $dbmediaId : $mediaId
+                            // "id" => $mediaId
                         ]
                     ]
                 ]

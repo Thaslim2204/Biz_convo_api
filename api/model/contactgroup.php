@@ -26,7 +26,7 @@ class GROUPMODEL extends APIRESPONSE
                     $result = $this->Groupdeactive($data, $loginData);
                     return $result;
                 } elseif ($urlParam[1] === 'alldelete') {
-                    $result = $this->AllDelete($data, $loginData);
+                    $result = $this->AllGroupDelete($data, $loginData);
                     return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
@@ -56,7 +56,6 @@ class GROUPMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] === 'selectdelete') {
                     $result = $this->selecteddataDelete($data, $loginData);
                     return $result;
-                
                 } elseif ($urlParam[1] === 'groupselectdelete') {
                     $result = $this->selecteddatagroupDelete($data, $loginData);
                     return $result;
@@ -625,7 +624,7 @@ class GROUPMODEL extends APIRESPONSE
                 $validationData = [
                     "id" => $groupId,
                     "Group Name" => $groupName,
-                    "description" => $description
+                    // "description" => $description
                 ];
                 $this->validateInputDetails($validationData);
 
@@ -686,19 +685,18 @@ class GROUPMODEL extends APIRESPONSE
     private function deleteGroup($data)
     {
         try {
-
             $id = $data[2];
             $db = $this->dbConnect();
-            // Check if the ID is provided and valid
-            if (empty($data[2])) {
+
+            if (empty($id)) {
                 throw new Exception("Invalid. Please enter your ID.");
             }
-            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact WHERE id = $id AND status=1";
-            // print_r($checkIdQuery);exit;
+
+            // Check if group exists
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_group_contact WHERE id = $id AND status = 1";
             $result = $db->query($checkIdQuery);
             $rowCount = $result->fetch_assoc()['count'];
 
-            // If ID doesn't exist, return error
             if ($rowCount == 0) {
                 $db->close();
                 return array(
@@ -709,33 +707,57 @@ class GROUPMODEL extends APIRESPONSE
                 );
             }
 
-            //update delete query
+            // Begin transaction
+            $db->begin_transaction();
 
-            $deleteQuery = "UPDATE cmp_group_contact
-            SET status = 0 
-            WHERE id = " . $id . "";
+            // Soft delete group
+            $deleteGroupQuery = "UPDATE cmp_group_contact SET status = 0 WHERE id = $id";
+            $db->query($deleteGroupQuery);
 
-            // print_r($deleteQuery);exit;
+            //  Soft delete mappings
+            $deleteMappingQuery = "UPDATE cmp_group_contact_mapping SET status = 0 WHERE group_id = $id";
+            $db->query($deleteMappingQuery);
 
-            if ($db->query($deleteQuery) === true) {
-                $db->close();
-                $statusCode = "200";
-                $statusMessage = "Group details deleted successfully";
-            } else {
-                $statusCode = "500";
-                $statusMessage = "Unable to delete Group details, please try again later";
+            // Get contact IDs mapped to this group
+            $getContactIdsQuery = "SELECT contact_id FROM cmp_group_contact_mapping WHERE group_id = $id";
+            $contactResult = $db->query($getContactIdsQuery);
+
+            $contactIds = [];
+            while ($row = $contactResult->fetch_assoc()) {
+                $contactIds[] = $row['contact_id'];
             }
-            $resultArray = array(
+
+            // 4. Soft delete contacts (only if contact IDs found)
+            if (!empty($contactIds)) {
+                $contactIdsString = implode(",", $contactIds);
+                $deleteContactsQuery = "UPDATE cmp_contact SET status = 0 WHERE id IN ($contactIdsString)";
+                $db->query($deleteContactsQuery);
+            }
+
+            // Commit all
+            $db->commit();
+            $db->close();
+
+            return array(
                 "apiStatus" => array(
-                    "code" => $statusCode,
-                    "message" => $statusMessage,
+                    "code" => "200",
+                    "message" => "Group and contact entries deleted successfully",
                 ),
             );
-            return $resultArray;
         } catch (Exception $e) {
-            throw new Exception($e->getMessage());
+            if (isset($db)) {
+                $db->rollback();
+                $db->close();
+            }
+            return array(
+                "apiStatus" => array(
+                    "code" => "500",
+                    "message" => "Error: " . $e->getMessage(),
+                ),
+            );
         }
     }
+
 
 
     private function selecteddataDelete($data, $loginData)
@@ -833,18 +855,91 @@ class GROUPMODEL extends APIRESPONSE
     }
 
 
-    private function AllDelete($data, $loginData) 
+
+
+    private function AllGroupDelete($data, $loginData)
     {
         try {
             $db = $this->dbConnect();
             $userId = $loginData['user_id'];
-    
-            $db->query("UPDATE cmp_contact SET status = 0 WHERE created_by = $userId");
-    
+
+            // Get all group IDs created by the user
+            $groupSql = "SELECT id FROM cmp_group_contact WHERE created_by = $userId AND status = 1";
+            $groupQuery = $db->query($groupSql);
+
+            $groupIds = [];
+            while ($row = $groupQuery->fetch_assoc()) {
+                $groupIds[] = $row['id'];
+            }
+
+            if (!empty($groupIds)) {
+                $groupIdsString = implode(',', $groupIds);
+
+                // Step 2: Get contact IDs from mappings linked to these groups
+                $contactMapSql = "SELECT contact_id FROM cmp_group_contact_mapping WHERE group_id IN ($groupIdsString) AND status = 1";
+                // print_r($contactMapSql);exit;
+                $contactQuery = $db->query($contactMapSql);
+
+                $contactIdsToCheck = [];
+                while ($row = $contactQuery->fetch_assoc()) {
+                    $contactIdsToCheck[] = $row['contact_id'];
+                }
+
+                $contactsToDelete = [];
+
+                if (!empty($contactIdsToCheck)) {
+                    $uniqueContactIds = array_unique($contactIdsToCheck);
+                    $contactIdsString = implode(',', $uniqueContactIds);
+
+                    // Step 3: Check all active group mappings of these contacts
+                    $checkSql = "SELECT contact_id, group_id FROM cmp_group_contact_mapping WHERE contact_id IN ($contactIdsString) AND status = 1";
+                    $checkQuery = $db->query($checkSql);
+
+                    $contactGroupMap = [];
+                    while ($row = $checkQuery->fetch_assoc()) {
+                        $cid = $row['contact_id'];
+                        $gid = $row['group_id'];
+                        if (!isset($contactGroupMap[$cid])) {
+                            $contactGroupMap[$cid] = [];
+                        }
+                        $contactGroupMap[$cid][] = $gid;
+                    }
+
+                    // Step 4: If all the contact's groups are inside user's group list, it's safe to delete
+                    foreach ($contactGroupMap as $cid => $mappedGroupIds) {
+                        $allGroupsMatch = true;
+                        foreach ($mappedGroupIds as $gid) {
+                            if (!in_array($gid, $groupIds)) {
+                                $allGroupsMatch = false;
+                                break;
+                            }
+                        }
+                        if ($allGroupsMatch) {
+                            $contactsToDelete[] = $cid;
+                        }
+                    }
+
+                    // Step 5: Soft delete only eligible contacts
+                    if (!empty($contactsToDelete)) {
+                        $contactsToDeleteStr = implode(',', $contactsToDelete);
+                        $contactDeleteSql = "UPDATE cmp_contact SET status = 0 WHERE id IN ($contactsToDeleteStr)";
+                        $db->query($contactDeleteSql);
+                    }
+                }
+
+                // Step 6: Soft delete group-contact mappings
+                $groupContactSql = "UPDATE cmp_group_contact_mapping SET status = 0 WHERE group_id IN ($groupIdsString)";
+                $db->query($groupContactSql);
+
+                // Step 7: Soft delete groups
+                $deleteGroupSql = "UPDATE cmp_group_contact SET status = 0 WHERE id IN ($groupIdsString)";
+                $db->query($deleteGroupSql);
+            }
+
             return [
                 'apiStatus' => [
                     'code' => "200",
-                    'message' => 'All contacts marked as deleted successfully.'
+                    'message' => 'All groups and related contacts deleted successfully.'
                 ]
             ];
         } catch (Exception $e) {
@@ -856,7 +951,6 @@ class GROUPMODEL extends APIRESPONSE
             ];
         }
     }
-    
 
     //Group ative and deactive
     public function Groupactiveachieve($data, $loginData)

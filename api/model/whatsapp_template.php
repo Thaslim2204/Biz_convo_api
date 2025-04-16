@@ -32,7 +32,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                     $result = $this->templateList($data, $loginData);
                     return $result;
                 } else if ($urlParam[1] == "sendMessage") {
-                    $result = $this->sendMessage($data, $loginData, "");
+                    $result = $this->sendMessage($data, $loginData, "", "");
                 } else if ($urlParam[1] == "uploadMedia") {
                     $result = $this->uploadMedia($data, $loginData);
                 } elseif ($urlParam[1] === 'testing') {
@@ -74,21 +74,37 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
     {
         // print_r($loginData);
         $db = $this->dbConnect();
+// print_r($loginData);exit;
+         // Get the Contact id from the login data
+         $user_id = $loginData['user_id'];
+         $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
+         $result = $db->query($sql);
+// print
+         if ($result) {
+             $row = $result->fetch_assoc();
+            //  print_r($row);exit;
+             if (!$row || !isset($row['vendor_id'])) {
+                 throw new Exception("Vendor ID not found for user ID: $user_id");
+             }
+             $vendor_id = $row['vendor_id'];
+         } else {
+             throw new Exception("Database query failed: " . $db->error);
+         }
 
         $this->facebook_base_url = "https://graph.facebook.com";
         $this->facebook_base_version = "v22.0";
 
         //get private tokens from DB
-        $sql = "SELECT whatsapp_business_acc_id, phone_no_id, access_token , app_id from cmp_vendor_fb_credentials where vendor_id = '1' and status = 1";
+        $sql = "SELECT whatsapp_business_acc_id, phone_no_id, access_token , app_id from cmp_vendor_fb_credentials where vendor_id = $vendor_id and status = 1";
         $result = $db->query($sql);
         $fbData = mysqli_fetch_assoc($result);
-        // print_r($fbData);exit;
-
+// print_r($fbData);exit;
         if ($fbData) {
             $this->whatsapp_business_id = $fbData['whatsapp_business_acc_id'];
             $this->phone_no_id = $fbData['phone_no_id'];
             $this->fb_auth_token = $fbData['access_token'];
             $this->facebook_app_id = $fbData['app_id'];
+            
         } else {
             throw new Exception("Failed to fetch Facebook credentials from the database.");
         }
@@ -289,8 +305,6 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             // echo $count;
             // exit;
             curl_close($curl);
-            // echo $response;exit;
-
             $db = $this->dbConnect();
             //Get the Store id from the login data
             $user_id = $loginData['user_id'];
@@ -913,9 +927,12 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
         }
     }
 
-    public function sendMessage($data, $loginData, $campaign_id)
+    public function sendMessage($data, $loginData, $campaign_id, $iscampaign)
     {
         try {
+
+
+            $this->fbCredentials($loginData);
             if (isset($data['scheduleStatus']) && $data['scheduleStatus'] === true) {
                 // It's a scheduled message, don't send immediately
                 return [
@@ -930,24 +947,24 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                     ],
                 ];
             }
-    
+
             // Proceed to send immediately
             $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
-    
+
             if ($fetchResponse['apiStatus']['code'] != "200") {
                 return $fetchResponse;
             }
-    
+
             $contacts = $fetchResponse['result']['contacts'];
             $template = $fetchResponse['result']['template'];
-    
+
             $successRecipient = [];
             $failureRecipient = [];
             $responseArray = [];
-    
+
             foreach ($contacts as $contact) {
-                $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'], $template['media_id']);
-    
+                $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'], $template['media_id'], $iscampaign,$campaign_id);
+
                 $body = [
                     'messaging_product' => 'whatsapp',
                     'recipient_type' => 'individual',
@@ -961,14 +978,14 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                         'components' => $dynamicComponents,
                     ],
                 ];
-    
+// print_r(json_encode($body));exit;
                 $insertcampaign = "INSERT INTO cmp_campaign_contact(campaign_id, contact_id, created_by, created_date) VALUES('" . $campaign_id . "','" . $contact['contactId'] . "','" . $loginData['user_id'] . "', NOW())";
                 $db = $this->dbConnect();
                 $db->query($insertcampaign);
-    
+
                 $curl = curl_init();
                 $url = $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->phone_no_id . '/messages';
-    
+
                 curl_setopt_array($curl, [
                     CURLOPT_URL => $url,
                     CURLOPT_RETURNTRANSFER => true,
@@ -984,20 +1001,20 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                         'Authorization: Bearer ' . $this->fb_auth_token,
                     ],
                 ]);
-    
+
                 $response = curl_exec($curl);
                 $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
                 curl_close($curl);
-    
+
                 $responseArray[] = json_decode($response, true);
-    
+
                 if ($httpCode == 200) {
                     $successRecipient[] = $contact['mobile'];
                 } else {
                     $failureRecipient[] = $contact['mobile'];
                 }
             }
-    
+
             return [
                 "apiStatus" => [
                     "code" => "200",
@@ -1009,7 +1026,6 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                     "apiResponse" => $responseArray,
                 ],
             ];
-    
         } catch (Exception $e) {
             return [
                 "apiStatus" => [
@@ -1019,12 +1035,12 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             ];
         }
     }
-    
+
 
     /**
      * Prepare dynamic components based on the template and contact data
      */
-    private function prepareDynamicComponents($templateComponents, $contact, $variableIds, $mediaId)
+    private function prepareDynamicComponents($templateComponents, $contact, $variableIds, $mediaId, $iscampaign,$campaign_id)
     {
         // print_r((json_encode($mediaId)));
         // exit;
@@ -1051,7 +1067,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                     } else if ($component['format'] != 'TEXT') {
                         // echo "csdkf";exit;
 
-                        $dynamicComponents[] = $this->prepareHeaderMediaComponent($component, $contact, $mediaId);
+                        $dynamicComponents[] = $this->prepareHeaderMediaComponent($component, $contact, $mediaId, $iscampaign,$campaign_id);
                     }
                     break;
 
@@ -1121,9 +1137,16 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
     }
 
 
-    private function prepareHeaderMediaComponent($component, $contact, $mediaId)
+    private function prepareHeaderMediaComponent($component, $contact, $mediaId, $iscampaign,$campaign_id)
     {
-        // print_r($component);exit;
+        $db = $this->dbConnect();
+        if ($iscampaign === "campaign") {
+            $sql = "SELECT media_id,media_url FROM cmp_campaign WHERE id='" . $campaign_id . "' AND status=1";
+            $result = $db->query($sql);
+            $row = $result->fetch_assoc();
+            $dbmediaId = $row['media_id'];
+        }
+        // print_r($dbmediaId);
         // Assuming the header media is an image (you can extend this for other media types like video)
         if (isset($component['format'])) {
             return [
@@ -1133,13 +1156,13 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                         'type' => $component['format'],
                         strtolower($component['format']) => [
                             // 'link' => $component['example']['header_handle'][0]
-                            "id" => $mediaId
+                            "id" => $dbmediaId ? $dbmediaId : $mediaId
+                            // "id" => $mediaId
                         ]
                     ]
                 ]
             ];
         }
-
         // You can extend this for other media types like videos
         // if (isset($component['parameters'][0]['video']['id'])) {
         //     return [

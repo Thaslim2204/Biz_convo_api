@@ -378,12 +378,13 @@ class CAMPAIGNMODEL extends APIRESPONSE
 
             // Insert Campaign
             $title = mysqli_real_escape_string($db, $data['title']);
+            $mediaId = mysqli_real_escape_string($db, $data['mediaId']);
             $restrictLangCode = mysqli_real_escape_string($db, $data['restrictLangCode']);
             $sendNum = mysqli_real_escape_string($db, $data['SendNum']);
             $createdBy = mysqli_real_escape_string($db, $loginData['user_id']);
 
-            $sql = "INSERT INTO cmp_campaign (group_id, template_id, title, restrictLangCode, timezone, schedule_at, send_status,send_num, created_by) 
-        VALUES ('$groupId', '$template_id', '$title', '$restrictLangCode', '$timezone_zoneName', '$scheduleAt','schedule' ,'$sendNum', '$createdBy')";
+            $sql = "INSERT INTO cmp_campaign (group_id, template_id, title, restrictLangCode, timezone, schedule_at, send_status,send_num,media_id, created_by) 
+        VALUES ('$groupId', '$template_id', '$title', '$restrictLangCode', '$timezone_zoneName', '$scheduleAt','Scheduled' ,'$sendNum','$mediaId', '$createdBy')";
 
             if (!mysqli_query($db, $sql)) {
                 throw new Exception("Error inserting campaign: " . mysqli_error($db));
@@ -400,7 +401,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
 
             // Send WhatsApp Message
             $call = new WHATSAPPTEMPLATEMODEL();
-            $resulthhtp= $call->sendMessage($data, $loginData, $campaign_id);
+            $resulthhtp= $call->sendMessage($data, $loginData, $campaign_id,"campaign");
             // print_r($resulthhtp['apiStatus']['code']);exit;
 
             if ($resulthhtp['apiStatus']['code'] !== "200") {
@@ -1100,7 +1101,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
             $recordCount = $countRow['totalCount']; // Total record count
 
             // Query to fetch vendors and their contact persons0
-            $queryService = "SELECT c.id,c.title,c.template_id,c.created_date,c.active_status,c.schedule_at,c.status AS campaignStatus,wt.template_name,wt.language
+            $queryService = "SELECT c.id,c.title,c.template_id,c.created_date,c.active_status,c.schedule_at,c.send_status,c.status AS campaignStatus,wt.template_name,wt.language
               FROM cmp_campaign AS c 
               JOIN cmp_whatsapp_templates AS wt ON wt.id = c.template_id
               WHERE c.status = 1 AND c.active_status=0 AND wt.status=1 AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
@@ -1122,6 +1123,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
                         "activeStatus" => $row['active_status'],
                         "createdDate" => $row['created_date'],
                         "scheduleAt" => $row['schedule_at'],
+                        "sendStatus" => $row['send_status'],
                         "status" => $row['campaignStatus']
                     );
                 }

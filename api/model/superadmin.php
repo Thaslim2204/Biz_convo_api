@@ -283,6 +283,7 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
             "first_name" => $userDetails['first_name'],
             "last_name" => $userDetails['last_name'],
             "username" => $userDetails['username'],
+            "logInAs" => "super_admin",
         );
 
         $result = array(

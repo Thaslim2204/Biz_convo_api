@@ -388,7 +388,7 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
             // Validate input data
             $this->validateInputDetails([
                 "firstName" => $data['firstName'],
-                "lastName" => $data['lastName'],
+                // "lastName" => $data['lastName'],
                 "username" => $data['username'],
                 "email" => $data['email'],
                 "password" => $data['password'],
@@ -502,7 +502,7 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
             $this->validateInputDetails([
                 "userId" => $data['userId'],
                 "firstName" => $data['firstName'],
-                "lastName" => $data['lastName'],
+                // "lastName" => $data['lastName'],
                 "username" => $data['username'],
                 "email" => $data['email'],
                 "storeId" => $data['storeId'],
