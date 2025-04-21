@@ -112,7 +112,23 @@ class CONTACTMODEL extends APIRESPONSE
             // print_r($loginData);
             $responseArray = ''; // Initializing response variable
             $db = $this->dbConnect();
-            $recordCount = $this->getTotalCount($loginData);
+
+            //filter using verndor id
+            $user_id = $loginData['user_id'];
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id";
+            $result = $db->query($sql);
+
+            if ($result) {
+                $row = $result->fetch_assoc();
+                if (!$row || !isset($row['vendor_id'])) {
+                    throw new Exception("Vendor ID not found for user ID: $user_id");
+                }
+                $vendor_id = $row['vendor_id'];
+            } else {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+
+            $recordCount = $this->getTotalCount($loginData, $vendor_id);
 
 
             // Validate pageIndex and dataLength
@@ -128,34 +144,35 @@ class CONTACTMODEL extends APIRESPONSE
             // Query to fetch  contact person details
             // Query to fetch contact person details with store name and cmp_status
             $queryService = "SELECT 
-    c.id AS ContactId, 
-    c.vendor_id, 
-    c.store_id, 
-    c.first_name, 
-    c.last_name,
-    c.gender, 
-    c.mobile, 
-    c.email, 
-    c.date_of_birth, 
-    c.anniversary, 
-    c.address, 
-    c.loyality, 
-    c.country, 
-     c.sales_amount, 
-    c.language_code, 
-    c.created_by, 
-    c.created_date, 
-    c.updated_by, 
-    c.updated_date, 
-    c.status, 
-    s.id AS store_id, 
-    s.store_name
-   
-FROM cmp_contact c
-JOIN cmp_store s ON c.store_id = s.id
+            c.id AS ContactId, 
+            c.vendor_id, 
+            c.store_id, 
+            c.first_name, 
+            c.last_name,
+            c.gender, 
+            c.mobile, 
+            c.email, 
+            c.date_of_birth, 
+            c.anniversary, 
+            c.address, 
+            c.loyality, 
+            c.country, 
+            c.sales_amount, 
+            c.language_code, 
+            c.created_by, 
+            c.created_date, 
+            c.updated_by, 
+            c.updated_date, 
+            c.status, 
+            s.id AS store_id, 
+            s.store_name
+        
+            FROM cmp_contact c
+            JOIN cmp_store s ON c.store_id = s.id
 
                     WHERE c.status = 1  
-                    AND c.created_by = " . $loginData['user_id'] . " 
+                    -- AND c.created_by = " . $loginData['user_id'] . " 
+                    AND c.vendor_id = $vendor_id
                     GROUP BY c.id
                     ORDER BY c.id DESC 
                     LIMIT $start_index, $end_index";
@@ -431,7 +448,7 @@ JOIN cmp_store s ON c.store_id = s.id
 
             // Check if the user already exists
             $sql = "SELECT id FROM cmp_contact WHERE mobile = '" . $data['mobile'] . "'
-             AND status = 1  AND  created_by = " . $loginData['user_id'];
+             AND status = 1  AND  vendor_id = " . $vendor_id;
             $result = mysqli_query($db, $sql);
             if (mysqli_num_rows($result) > 0) {
                 throw new Exception("Contact already exist");
@@ -549,22 +566,35 @@ JOIN cmp_store s ON c.store_id = s.id
 
             $this->validateInputDetails($validationData);
 
+            $user_id = $loginData['user_id'];
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id";
+            $result = $db->query($sql);
+
+            if ($result) {
+                $row = $result->fetch_assoc();
+                if (!$row || !isset($row['vendor_id'])) {
+                    throw new Exception("Vendor ID not found for user ID: $user_id");
+                }
+                $vendor_id = $row['vendor_id'];
+            } else {
+                throw new Exception("Database query failed: " . $db->error);
+            }
             // Check if the contact exists
-            $sql = "SELECT id FROM cmp_contact WHERE id = '" . $data['contactId'] . "' AND status = 1 AND created_by = " . $loginData['user_id'];
+            $sql = "SELECT id FROM cmp_contact WHERE id = '" . $data['contactId'] . "' AND status = 1 AND created_by =  " . $loginData['user_id'] . " AND vendor_id = '" . $vendor_id . "'";
             $result = mysqli_query($db, $sql);
             if (!$result || mysqli_num_rows($result) === 0) {
                 throw new Exception("Contact not found");
             }
 
             // Check if Contact ID exists
-            $sql = "SELECT id FROM cmp_store WHERE id = '" . $data['storeId'] . "' AND status = 1 AND active_status = 1 AND created_by = " . $loginData['user_id'];
+            $sql = "SELECT id FROM cmp_store WHERE id = '" . $data['storeId'] . "' AND status = 1 AND active_status = 1 ANDvendor_id = '" . $vendor_id . "'";
             $result = mysqli_query($db, $sql);
             if (!$result || mysqli_num_rows($result) === 0) {
-                throw new Exception('Invalid Contact ID');
+                throw new Exception('Invalid Store ID');
             }
 
             // Check if the mobile number already exists for another contact
-            $sql = "SELECT id FROM cmp_contact WHERE mobile = '" . $data['mobile'] . "' AND id != '" . $data['contactId'] . "' AND status = 1";
+            $sql = "SELECT id FROM cmp_contact WHERE mobile = '" . $data['mobile'] . "' AND id != '" . $data['contactId'] . "' AND status = 1 AND vendor_id = '" . $vendor_id . "'";
             $result = mysqli_query($db, $sql);
             if ($result && mysqli_num_rows($result) > 0) {
                 throw new Exception("Mobile number already exists for another contact");
@@ -1350,11 +1380,11 @@ JOIN cmp_store s ON c.store_id = s.id
         }
     }
 
-    private function getTotalCount($loginData)
+    private function getTotalCount($loginData, $vendor_id)
     {
         try {
             $db = $this->dbConnect();
-            $sql = "SELECT * FROM cmp_contact WHERE  created_by = " . $loginData['user_id'] . " AND status = 1";
+            $sql = "SELECT * FROM cmp_contact WHERE  vendor_id = " . $vendor_id . " AND status = 1";
             // print_r($sql);exit;
             $result = $db->query($sql);
             $row_cnt = mysqli_num_rows($result);

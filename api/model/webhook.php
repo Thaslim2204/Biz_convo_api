@@ -136,9 +136,8 @@ class WEBHOOKMODEL extends APIRESPONSE
         // }
 
         $entry = $data['entry'][0]['changes'][0]['value'];
+
         $created_date = date('Y-m-d H:i:s');
-        // echo "come here";
-        // print_r(json_encode($entry));exit;
         //  USER message handler
         if (isset($entry['messages'])) {
             $msg = $entry['messages'][0];
@@ -147,10 +146,14 @@ class WEBHOOKMODEL extends APIRESPONSE
             $messageText = isset($msg['text']['body']) ? mysqli_real_escape_string($db, $msg['text']['body']) : '';
             $messageType = mysqli_real_escape_string($db, $msg['type']);
             $messageStatus = 'pending';
+            $timestamp = $msg['timestamp']; // WhatsApp timestamp
+            $date = new DateTime("@$timestamp"); // Convert Unix timestamp
+            $date->setTimezone(new DateTimeZone('Asia/Kolkata'));
+            $message_datetime = $date->format('Y-m-d H:i:s'); // NOW formatted WhatsApp message time
             $agent = 'user';
             $agent_contact = $sender;
             // $created_by = $agent;
-            $updated_date = date('Y-m-d H:i:s');
+
             $checkQuery = "SELECT id FROM cmp_whatsapp_messages WHERE wam_id = '$wam_id' LIMIT 1";
             $result = mysqli_query($db, $checkQuery);
             print_r($checkQuery);
@@ -159,17 +162,23 @@ class WEBHOOKMODEL extends APIRESPONSE
 
                 $updateQuery = "
                 UPDATE cmp_whatsapp_messages 
-                SET message_status = '$messageStatus' , updated_date='$updated_date'
+                SET message_status = '$messageStatus' , updated_date='$message_datetime'
                 WHERE wam_id = '$wam_id'
             ";
                 mysqli_query($db, $updateQuery);
             } else {
+                //get the vendor id from the sender number
+                $vendorQuery = "SELECT vendor_id FROM cmp_contact WHERE mobile = '$agent_contact' LIMIT 1";
+                $vendorResult = mysqli_query($db, $vendorQuery);
+                $vendorRow = mysqli_fetch_assoc($vendorResult);
+                $vendor_id = $vendorRow['vendor_id'];
+
                 // echo "inset quers";
                 $insertQuery = "
                 INSERT INTO cmp_whatsapp_messages 
-                (agent, agent_contact, message_type, wam_id, message_body, message_status, created_date)
+                (vendor_id,agent, agent_contact, message_type, wam_id, message_body, message_status, created_date)
                 VALUES 
-                ('$agent', '$agent_contact', '$messageType', '$wam_id', '$messageText', '$messageStatus',  '$created_date')
+                ('$vendor_id','$agent', '$agent_contact', '$messageType', '$wam_id', '$messageText', '$messageStatus',  '$message_datetime')
             ";
                 mysqli_query($db, $insertQuery);
             }
@@ -185,7 +194,11 @@ class WEBHOOKMODEL extends APIRESPONSE
             $messageType = 'text';
             $messageText = '';
             // $created_by = $agent;
-            $updated_date = date('Y-m-d H:i:s');
+            $timestamp = $status['timestamp']; // WhatsApp timestamp for status
+            $date = new DateTime("@$timestamp");
+            $date->setTimezone(new DateTimeZone('Asia/Kolkata'));
+            $updated_date = $date->format('Y-m-d H:i:s'); // BOT status time
+
             $checkQuery = "SELECT id FROM cmp_whatsapp_messages WHERE wam_id = '$wam_id' ";
             // print_r($checkQuery);
             $result = mysqli_query($db, $checkQuery);
@@ -201,7 +214,7 @@ class WEBHOOKMODEL extends APIRESPONSE
                 WHERE wam_id = '$wam_id'
             ";
                 mysqli_query($db, $updateQuery);
-            } else {
+                // } else {
                 // $insertQuery = "
                 //     INSERT INTO cmp_whatsapp_messages 
                 //     (agent, agent_contact, message_type, wam_id, message_body, message_status, created_by, created_date)

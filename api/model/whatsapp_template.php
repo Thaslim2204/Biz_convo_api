@@ -98,11 +98,11 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
         $sql = "SELECT whatsapp_business_acc_id, phone_no_id, access_token , app_id from cmp_vendor_fb_credentials where vendor_id = $vendor_id and status = 1";
         $result = $db->query($sql);
         $fbData = mysqli_fetch_assoc($result);
-// print_r($fbData);exit;
         if ($fbData) {
             $this->whatsapp_business_id = $fbData['whatsapp_business_acc_id'];
             $this->phone_no_id = $fbData['phone_no_id'];
             $this->fb_auth_token = $fbData['access_token'];
+            // print_r($this->fb_auth_token);exit;
             $this->facebook_app_id = $fbData['app_id'];
             
         } else {
@@ -311,10 +311,10 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id";
             $result = $db->query($sql);
             $vendor_id = $result->fetch_assoc()['vendor_id'];
-
+// print_r($vendor_id);exit;
             // Generate unique user ID
             $uid = bin2hex(random_bytes(8));
-            $sql = "SELECT id, template_id, created_date, updated_date FROM cmp_whatsapp_templates WHERE status = 1 AND created_by = '" . $loginData['user_id'] . "'";
+            $sql = "SELECT id, template_id, created_date, updated_date FROM cmp_whatsapp_templates WHERE status = 1 AND vendor_id = '" . $vendor_id . "' ";
             // print_r($sql);exit;
             $result = $db->query($sql);
 
@@ -361,15 +361,17 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             }
             $db->commit();
             // Get total count of templates from db
-            $totalCount = "SELECT * FROM cmp_whatsapp_templates WHERE status = 1 AND created_by = '" . $loginData['user_id'] . "'";
+            $totalCount = "SELECT * FROM cmp_whatsapp_templates WHERE status = 1 AND vendor_id = '" . $vendor_id . "' ";
 
             $countResult = $db->query($totalCount);
             $row_cnt = mysqli_num_rows($countResult);
-            $query = "SELECT * FROM cmp_whatsapp_templates WHERE status = 1 AND created_by = '" . $loginData['user_id'] . "'ORDER BY id DESC 
+            $query = "SELECT * FROM cmp_whatsapp_templates WHERE status = 1 AND vendor_id = '" . $vendor_id . "' 
+                ORDER BY id DESC 
                  LIMIT $start_index, $end_index";
+                 
             $result = $db->query($query);
             $templates = [];
-
+// created_by = '" . $loginData['user_id'] . "'
             if ($result->num_rows > 0) {
                 while ($row = $result->fetch_assoc()) {
                     $templates[] = array(
@@ -499,7 +501,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
         try {
             $this->fbCredentials($loginData);
             $url = $this->facebook_base_url . "/" . $this->facebook_base_version . "/" . $this->whatsapp_business_id . "/" . "message_templates?fields=name,status&status=APPROVED";
-            // echo $url;
+            // echo $url;exit;
             $queryParams = [];
             if (!empty($data['limit'])) {
                 $queryParams[] = "limit=" . $data['limit'];
@@ -530,8 +532,9 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             $response = curl_exec($curl);
             $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
             curl_close($curl);
-
             $responseData = json_decode($response, true);
+// print_r($responseData);exit;
+
             $approvedTemplates = [];
 
             if (isset($responseData["data"]) && is_array($responseData["data"])) {
@@ -721,7 +724,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
 
             //for upload media session
             $sessionUrl =  $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->facebook_app_id . '/' . "uploads?file_name=$fileName&file_length=$fileSize&file_type=$fileType&access_token=$this->fb_auth_token";
-            //  echo $sessionUrl;
+            //  print_r($sessionUrl) ;
             //  exit;
 
             //Call Upload session url

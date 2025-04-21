@@ -22,6 +22,12 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] == "list") {
                     $result = $this->messagelist($data, $loginData);
                     return $result;
+                } elseif ($urlParam[1] == "sidelist") {
+                    $result = $this->sidecontactlist($data, $loginData);
+                    return $result;
+                } elseif ($urlParam[1] == "contactinfo") {
+                    $result = $this->contactinfo($data, $loginData);
+                    return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -43,7 +49,7 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
     private $phone_no_id;
     private $fb_auth_token;
     // private $facebook_app_id;
-    private function fbCredentials($loginData)
+    private function fbCredentials($vendor_id)
     {
         // print_r($loginData);
         $db = $this->dbConnect();
@@ -52,7 +58,7 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
         $this->facebook_base_version = "v22.0";
 
         //get private tokens from DB
-        $sql = "SELECT whatsapp_business_acc_id, phone_no_id, access_token , app_id from cmp_vendor_fb_credentials where vendor_id = '1' and status = 1";
+        $sql = "SELECT whatsapp_business_acc_id, phone_no_id, access_token , app_id from cmp_vendor_fb_credentials where vendor_id = $vendor_id and status = 1";
         $result = $db->query($sql);
         $fbData = mysqli_fetch_assoc($result);
         // print_r($fbData);exit;
@@ -220,8 +226,25 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
     {
         // print_r($loginData);exit;
         try {
-            $this->fbCredentials($loginData);
+            $db = $this->dbConnect();
+            $user_id = $loginData['user_id'];
+
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id";
+            $result = $db->query($sql);
+
+            if ($result) {
+                $row = $result->fetch_assoc();
+                if (!$row || !isset($row['vendor_id'])) {
+                    throw new Exception("Vendor ID not found for user ID: $user_id");
+                }
+                $vendor_id = $row['vendor_id'];
+            } else {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+
+            $this->fbCredentials($vendor_id);
             $url =  $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->phone_no_id . '/' . "messages";
+            // print_r($url);exit;
             $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'Authorization: Bearer ' . $this->fb_auth_token,
@@ -260,9 +283,9 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
 
                 // Insert into database
                 $insertmsgquery = "INSERT INTO `cmp_whatsapp_messages` 
-    (agent,agent_contact, wam_id, message_type, message_body, media_link, message_status, created_by) 
-    VALUES ('bot' ,'$agentContact', '$wamId', '$messageType', '$messageBody', '$mediaLink', '$messageStatus', '$createdBy')";
-
+    (agent,agent_contact,vendor_id, wam_id, message_type, message_body, media_link, message_status, created_by) 
+    VALUES ('bot' ,'$agentContact','$vendor_id', '$wamId', '$messageType', '$messageBody', '$mediaLink', '$messageStatus', '$createdBy')";
+        // print_r($insertmsgquery);
 
                 // print_r($insertmsgquery);exit;
                 $conn = $this->dbConnect();
@@ -299,8 +322,19 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
         try {
             $db = $this->dbConnect();
             $recipient = isset($data['filter']['to']) ? $data['filter']['to'] : null;
-            $userId = $loginData['user_id'];
+            $user_id = $loginData['user_id'];
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id";
+            $result = $db->query($sql);
 
+            if ($result) {
+                $row = $result->fetch_assoc();
+                if (!$row || !isset($row['vendor_id'])) {
+                    throw new Exception("Vendor ID not found for user ID: $user_id");
+                }
+                $vendor_id = $row['vendor_id'];
+            } else {
+                throw new Exception("Database query failed: " . $db->error);
+            }
             if ($data['pageIndex'] === "") {
                 throw new Exception("pageIndex should not be empty!");
             }
@@ -324,7 +358,7 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
             // Get paginated messages
             $query = "SELECT agent,message_type,wam_id,agent_contact, message_body,media_link, message_status, created_date,updated_date
                       FROM cmp_whatsapp_messages  
-                      WHERE status=1";
+                      WHERE status=1 AND vendor_id = '$vendor_id'";
             if ($recipient) {
                 $query .= " AND agent_contact = '$recipient'";
             }
@@ -345,7 +379,7 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
                         "MessageMedia" => $row['media_link'] ?? ""
                     ],
                     "messageStatus" => $row['message_status'],
-                    "time" => date("H:i:s", strtotime($row['updated_date'])),
+                    "time" => date("H:i:s", strtotime($row['created_date'])),
                 ];
             }
 
@@ -379,6 +413,180 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
             ];
         }
     }
+
+    //side contact side
+
+    public function sidecontactlist($data, $loginData)
+    {
+        try {
+            $db = $this->dbConnect();
+
+            $userId = $loginData['user_id'];
+
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $userId";
+            $result = $db->query($sql);
+
+            if ($result) {
+                $row = $result->fetch_assoc();
+                if (!$row || !isset($row['vendor_id'])) {
+                    throw new Exception("Vendor ID not found for user ID: $userId");
+                }
+                $vendor_id = $row['vendor_id'];
+            } else {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+
+            // Get total count
+            $countQuery = "SELECT COUNT(*) AS totalCount FROM cmp_whatsapp_messages WHERE status=1 and vendor_id = '$vendor_id'";
+            $countResult = $db->query($countQuery);
+            $countRow = $countResult->fetch_assoc();
+            $recordCount = $countRow['totalCount'];
+
+            // Get paginated messages
+            $query = "SELECT c.id, wm.agent_contact, c.first_name, c.last_name, wm.created_date
+                  FROM cmp_whatsapp_messages AS wm
+                 LEFT JOIN cmp_contact AS c ON wm.agent_contact = c.mobile
+                  WHERE wm.status=1 AND wm.vendor_id = '$vendor_id'
+                  GROUP BY wm.agent_contact
+                  ORDER BY wm.created_by ASC";
+
+            $result = $db->query($query);
+            // print_r($query);exit;
+            $messages = [];
+            while ($row = $result->fetch_assoc()) {
+                $createdDateTime = strtotime(trim($row['created_date']));
+                $currentDateTime = time();
+                $timeDifference = $currentDateTime - $createdDateTime;
+                // Calculate "time ago" format
+                if ($timeDifference < 60) {
+                    $lastMessageTime = "Just now";
+                } elseif ($timeDifference < 3600) {
+                    $minutes = floor($timeDifference / 60);
+                    $lastMessageTime = $minutes . " minute" . ($minutes > 1 ? "s" : "") . " ago";
+                } elseif ($timeDifference < 86400) {
+                    $hours = floor($timeDifference / 3600);
+                    $lastMessageTime = $hours . " hour" . ($hours > 1 ? "s" : "") . " ago";
+                } else {
+                    $days = floor($timeDifference / 86400);
+                    $lastMessageTime = $days . " day" . ($days > 1 ? "s" : "") . " ago";
+                }
+
+                $messages[] = [
+                    "contactId" => $row['id'],
+                    "contactName" => $row['first_name'] . " " . $row['last_name'],
+                    "contactNumber" => $row['agent_contact'],
+                    "time" => date("H:i:s", $createdDateTime),
+                    "lastMessageTime" => $lastMessageTime
+                ];
+            }
+
+            if (!empty($messages)) {
+                return [
+                    "apiStatus" => [
+                        "code" => "200",
+                        "message" => "Side Contact details fetched successfully"
+                    ],
+                    "result" => [
+                        "totalRecordCount" => $recordCount,
+                        "MessageData" => $messages
+                    ]
+                ];
+            } else {
+                return [
+                    "apiStatus" => [
+                        "code" => "404",
+                        "message" => "No data found..."
+                    ]
+                ];
+            }
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "500",
+                    "message" => $e->getMessage()
+                ]
+            ];
+        }
+    }
+
+    public function contactinfo($data, $loginData)
+    {
+        try {
+            $db = $this->dbConnect();
+            $userId = $loginData['user_id'];
+
+            if (empty($data['contactNumber'])) {
+                throw new Exception("Contact number is required.");
+            }
+            // Get vendor_id for the user
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $userId";
+            $result = $db->query($sql);
+
+            if ($result) {
+                $row = $result->fetch_assoc();
+                if (!$row || !isset($row['vendor_id'])) {
+                    throw new Exception("Vendor ID not found for user ID: $userId");
+                }
+                $vendor_id = $row['vendor_id'];
+            } else {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+
+            // Get contact info
+            $query = "SELECT * FROM cmp_contact 
+                  WHERE status = 1 
+                  AND vendor_id = '$vendor_id' 
+                  AND mobile = '" . $db->real_escape_string($data['contactNumber']) . "'";
+            $result = $db->query($query);
+
+            if (!$result) {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+
+            if ($result->num_rows == 0) {
+                // No data found, throw exception
+                throw new Exception("No contact found with the given number.");
+            }
+
+            $contact = $result->fetch_assoc();
+
+            $messages = [
+                [
+                    "contactId" => $contact['id'],
+                    "contactName" => $contact['first_name'] . " " . $contact['last_name'],
+                    "contactNumber" => $contact['mobile'],
+                    "contactEmail" => $contact['email'],
+                    "lanaguage" => $contact['language_code'],
+                    "country" => $contact['country'],
+                    "contactDob" => $contact['date_of_birth'],
+                    "contactAddress" => $contact['address'],
+                    "contactCompany" => $contact['company'],
+                    "salesamount" => $contact['sales_amount'],
+                    "anniversary" => $contact['anniversary'],
+                    "loyalitypoints" => $contact['loyality'],
+                ]
+            ];
+
+            return [
+                "apiStatus" => [
+                    "code" => "200",
+                    "message" => "Contact Info details fetched successfully"
+                ],
+                "result" => [
+                    "ContactInfoData" => $messages
+                ]
+            ];
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "500",
+                    "message" => $e->getMessage()
+                ]
+            ];
+        }
+    }
+
+
     private function handle_error() {}
     public function processList($request, $token)
     {
