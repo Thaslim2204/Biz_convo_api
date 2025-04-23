@@ -36,6 +36,9 @@ class BOTREPLYMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] === 'list') {
                     $result = $this->getBotReplyDetails($data, $loginData);
                     return $result;
+                } elseif ($urlParam[1] === 'mediaupload') {
+                    $result = $this->BotMediaUpload($data, $loginData);
+                    return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -86,7 +89,7 @@ class BOTREPLYMODEL extends APIRESPONSE
         try {
             $responseArray = ''; // Initializing response variable
             $db = $this->dbConnect();
-            $recordCount = $this->getTotalCount($loginData);
+
 
             // Check if pageIndex and dataLength are not empty
             if ($data['pageIndex'] === "") {
@@ -100,19 +103,36 @@ class BOTREPLYMODEL extends APIRESPONSE
             $end_index = $data['dataLength'];
 
             // Query to fetch vendors and their contact persons0
-            $queryService = "SELECT *FROM cmp_store cs
-                 WHERE cs.status = 1 AND cvum.user_id = " . $loginData['user_id'] . "  
-                 ORDER BY cs.id DESC 
+            $queryService = "SELECT mbt.name AS triggerName, br.*
+                    FROM cmp_bot_replies AS br
+                    LEFT JOIN cmp_mst_bot_trigger_type AS mbt ON mbt.id = br.trigger_type_id
+             WHERE  br.status = 1 AND br.active_status = 1 AND br.vendor_id = (SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = " . $loginData['user_id'] . ")
+                 ORDER BY br.id DESC 
                  LIMIT $start_index, $end_index";
 
             //   print_r($queryService);exit;
             $result = $db->query($queryService);
             $row_cnt = mysqli_num_rows($result);
 
-            $BotReply = array(); // Initialize array to hold Store data
+            $BotReply = [];
             if ($row_cnt > 0) {
                 while ($row = $result->fetch_assoc()) {
-                    $BotReply[] = array();
+                    $BotReply[] = array(
+                        "id" => $row['id'],
+                        "name" => $row['name'],
+                        "intent" => json_decode($row['intent'], true),
+                        "message_type" => $row['message_type'],
+                        "message_body" => json_decode($row['message_body'], true),
+                        "trigger" => array(
+                            "type" => $row['trigger_type_id'],
+                            "name" => $row['triggerName'], // Corrected from 'tiggerName'
+                        ),
+                        "created_by" => $row['created_by'],
+                        "created_date" => $row['created_date'],
+                        "updated_by" => $row['updated_by'],
+                        "updated_date" => $row['updated_date'],
+                        "active_status" => $row['active_status'],
+                    );
                 }
             }
 
@@ -120,16 +140,16 @@ class BOTREPLYMODEL extends APIRESPONSE
             $responseArray = array(
                 "pageIndex" => $data['pageIndex'],
                 "dataLength" => $data['dataLength'],
-                "totalRecordCount" => $recordCount,
-                'StoreData' => array_values($BotReply), // Reset array keys
+                "totalRecordCount" => $row_cnt,
+                "BotReplyData" => $BotReply,
             );
 
-            // Check if Store data exists
-            if (!empty($Store)) {
+            // Prepare the result array with response status
+            if (!empty($BotReply)) {
                 $resultArray = array(
                     "apiStatus" => array(
                         "code" => "200",
-                        "message" => "Store details fetched successfully",
+                        "message" => "Bot reply details fetched successfully",
                     ),
                     "result" => $responseArray,
                 );
@@ -171,13 +191,12 @@ class BOTREPLYMODEL extends APIRESPONSE
             }
 
             $db = $this->dbConnect();
-            $sql = "SELECT cs.id, cs.uid, cs.store_name, cs.address_line1, cs.address_line2, cs.dist, cs.state, cs.pincode, cs.phone, cs.email, 
-                        cs.active_status, cs.created_by, cs.created_date, cs.updated_by, cs.updated_date 
-                 FROM cmp_store cs
-                 INNER JOIN cmp_vendor_store_mapping cvsm ON cs.id = cvsm.store_id
-                 INNER JOIN cmp_vendor_user_mapping cvum ON cvsm.vendor_id = cvum.vendor_id  
-                    WHERE cs.id = $id AND cs.status = 1 AND cvum.user_id = " . $loginData['user_id'] . " 
-                      ";
+            $sql = "SELECT mbt.name AS triggerName, br.*
+                    FROM cmp_bot_replies AS br
+                    LEFT JOIN cmp_mst_bot_trigger_type AS mbt ON mbt.id = br.trigger_type_id
+             WHERE br.id = $id AND br.status = 1 AND br.active_status = 1 AND br.vendor_id = (SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = " . $loginData['user_id'] . ")";
+            // print_r($sql);exit;
+            // Execute the query
 
             $result = $db->query($sql);
 
@@ -188,27 +207,26 @@ class BOTREPLYMODEL extends APIRESPONSE
 
                 while ($row = $result->fetch_assoc()) {
                     $BotReply = array(
-                        "storeId" => $row['id'],
-                        "storeUid" => $row['uid'],
-                        "storeName" => $row['store_name'],
-                        "storeAddressLine1" => $row['address_line1'],
-                        "storeAddressLine2" => $row['address_line2'],
-                        "storeDist" => $row['dist'],
-                        "storeState" => $row['state'],
-                        "storePincode" => $row['pincode'],
-                        "storePhone" => $row['phone'],
-                        "storeEmail" => $row['email'],
-                        "storeStatus" => $row['active_status'],
-                        "createdBy" => $row['created_by'],
-                        "createdDate" => $row['created_date'],
-                        "updatedBy" => $row['updated_by'],
-                        "updatedDate" => $row['updated_date'],
+                        "id" => $row['id'],
+                        "name" => $row['name'],
+                        "intent" => json_decode($row['intent'], true),
+                        "message_type" => $row['message_type'],
+                        "message_body" => json_decode($row['message_body'], true),
+                        "trigger" => array(  // Change this line to use array()
+                            "type" => $row['trigger_type_id'],
+                            "name" => $row['triggerName'],
+                        ),
+                        "created_by" => $row['created_by'],
+                        "created_date" => $row['created_date'],
+                        "updated_by" => $row['updated_by'],
+                        "updated_date" => $row['updated_date'],
+                        "active_status" => $row['active_status'],
                     );
                 }
                 $resultArray = array(
                     "apiStatus" => array(
                         "code" => "200",
-                        "message" => "Store detail fetched successfully",
+                        "message" => "Bot Reply detail fetched successfully",
                     ),
                     "result" => $BotReply
                 );
@@ -216,7 +234,7 @@ class BOTREPLYMODEL extends APIRESPONSE
                 $resultArray = array(
                     "apiStatus" => array(
                         "code" => "404",
-                        "message" => "Store not found",
+                        "message" => "Bot Reply not found",
                     )
                 );
             }
@@ -235,7 +253,88 @@ class BOTREPLYMODEL extends APIRESPONSE
             );
         }
     }
+    public function BotMediaUpload($loginData)
+    {
+        try {
+            // Access the uploaded file
+            if (!isset($_FILES['file']) || empty($_FILES['file']['name'])) {
+                throw new Exception("No file uploaded or file name is empty.");
+            }
 
+            $file = $_FILES['file'];
+            $fileName = $file['name'];
+            $tempPath = $file['tmp_name'];
+            $fileSize = $file['size'];
+            $fileType = mime_content_type($tempPath); // More reliable type check
+
+            $db = $this->dbConnect();
+
+            // Define the base upload path
+            $basePath = 'uploads/botmedia/';
+            $uploadPath = '';
+
+            // Determine file category by mime type
+            if (strpos($fileType, 'image') !== false) {
+                $uploadPath = $basePath . 'images/';
+            } elseif (strpos($fileType, 'video') !== false) {
+                $uploadPath = $basePath . 'videos/';
+            } elseif (
+                strpos($fileType, 'application/pdf') !== false ||
+                strpos($fileType, 'application/msword') !== false ||
+                strpos($fileType, 'application/vnd.openxmlformats-officedocument') !== false
+            ) {
+                $uploadPath = $basePath . 'documents/';
+            } else {
+                throw new Exception("Unsupported file type.");
+            }
+
+            // Create directory if not exists
+            if (!is_dir($uploadPath)) {
+                mkdir($uploadPath, 0777, true);
+            }
+
+            // Validate file size (limit 5MB)
+            if ($fileSize > 10000000) {
+                throw new Exception("File is too large! Maximum allowed size is 10 MB.");
+            }
+
+            // Prepare the file name
+            $fileExt = pathinfo($fileName, PATHINFO_EXTENSION);
+            $baseName = pathinfo($fileName, PATHINFO_FILENAME);
+            $timeStamp = date('ymdHis');
+            $cleanName = preg_replace('/\s+/', '', $baseName);
+            $alteredName = $cleanName . "_" . $timeStamp . "." . strtolower($fileExt);
+
+            $finalPath = $uploadPath . $alteredName;
+
+            // Move the uploaded file
+            if (!move_uploaded_file($tempPath, $finalPath)) {
+                throw new Exception("Failed to move uploaded file.");
+            }
+
+            // Success Response
+            $responseData = array(
+                "apiStatus" => array(
+                    "code" => "200",
+                    "message" => "File Uploaded Successfully",
+                ),
+                "result" => array(
+                    "FileOriginalName" => $fileName,
+                    "FileAlteredName" => $alteredName,
+                    "Path" => $finalPath,
+                ),
+            );
+
+            return $responseData;
+        } catch (Exception $e) {
+            return array(
+                "apiStatus" => array(
+                    "code" => "401",
+                    "message" => $e->getMessage(),
+                ),
+            );
+        }
+    }
 
 
     /**
@@ -246,54 +345,60 @@ class BOTREPLYMODEL extends APIRESPONSE
      */
     public function createBotReply($data, $loginData)
     {
-        // Initialize result array
         $resultArray = array();
         try {
-            print_r($data);exit;
             $db = $this->dbConnect();
-            // Check if the logged-in user is an Admin or Super Admin
-            // if (!in_array($loginData['role_name'], [ 'Vendor_super_admin'])) {
-            //     throw new Exception("Permission denied. Only Super Admin can create a user.");
-            // }
+
+            // Extracting botAction
+            $botAction = $data['botAction'];
 
             // Validate input data
             $validationData = array(
-                "Name" => $data['name'],
-                "Intent"      => $data['intent'],
-                "Message Body" => $data['message_body'],
-
-
+                "Name" => $botAction['botName'],
+                "Intent" => json_encode($botAction['intents']),
+                "Message Body" => json_encode($botAction['responses']), // Array encoded to JSON
             );
-
             $this->validateInputDetails($validationData);
-            //Get the  id from the login data
+
+            // Get user_id and vendor_id
             $user_id = $loginData['user_id'];
             $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id";
             $result = $db->query($sql);
             $vendor_id = $result->fetch_assoc()['vendor_id'];
-            // print_r($vendor_id);exit;
-
-            // Validate Trigger ID
-            $botReplyQuery = "SELECT id FROM cmp_mst_bot_trigger_type WHERE name = '" . $data['triggerType'] . "' AND status = 1";
+            if (empty($vendor_id)) {
+                throw new Exception("Vendor ID not found for user ID: $user_id");
+            }
+            // Check if the bot action already exists
+            $sql = "SELECT id FROM cmp_bot_replies WHERE name = '" . $botAction['botName'] . "' AND vendor_id = " . $vendor_id;
+            $result = mysqli_query($db, $sql);
+            if (mysqli_num_rows($result) > 0) {
+                throw new Exception("Bot Name already exist");
+            }
+            // Validate Trigger Type
+            $triggerTypeName = $botAction['trigger']['type']; // Example: "starts_with"
+            $botReplyQuery = "SELECT id FROM cmp_mst_bot_trigger_type WHERE name = '" . $triggerTypeName . "' AND status = 1";
             $botReplyResult = $db->query($botReplyQuery);
             if ($botReplyResult->num_rows === 0) {
-                throw new Exception("Invalid store: " . $data['triggerType']);
+                throw new Exception("Invalid trigger type: " . $triggerTypeName);
             }
-            $triggerType = $storeResult->fetch_assoc()['id'];
+            $triggerType = $botReplyResult->fetch_assoc()['id'];
 
-            // Insert into cmp_store
-            $insertStoreQuery = "INSERT INTO cmp_bot_replies (vendor_id, trigger_type_id,name,intent,message_type,message_body, created_by)
-                  VALUES ( '$vendor_id','$triggerType','" . $data['name'] . "','" . $data['intent'] . "','" . $data['MessageType'] . "','" . $data['MessageBody'] . "', '" . $user_id . "')";
-            // print_r($insertStoreQuery);exit;
+            // Prepare insert
+            $name = $db->real_escape_string($botAction['botName']);
+            $intent = $db->real_escape_string(json_encode($botAction['intents']));
+            $messageType = $botAction['responses'][0]['type'];
+            $messageBody = $db->real_escape_string(json_encode($botAction['responses']));
+
+            $insertStoreQuery = "INSERT INTO cmp_bot_replies 
+            (vendor_id, trigger_type_id, name, intent, message_type, message_body, created_by)
+            VALUES 
+            ('$vendor_id', '$triggerType', '$name', '$intent', '$messageType', '$messageBody', '$user_id')";
+
             if ($db->query($insertStoreQuery) === true) {
-
-
-
                 $db->close();
-
                 $resultArray = array(
                     "apiStatus" => array(
-                        "code"    => "200",
+                        "code" => "200",
                         "message" => "Bot Reply details successfully created.",
                     ),
                 );
@@ -306,7 +411,7 @@ class BOTREPLYMODEL extends APIRESPONSE
             }
             $resultArray = array(
                 "apiStatus" => array(
-                    "code"    => "401",
+                    "code" => "401",
                     "message" => $e->getMessage(),
                 ),
             );
@@ -315,16 +420,17 @@ class BOTREPLYMODEL extends APIRESPONSE
     }
 
 
+
     private function updateBotReply($data, $loginData)
     {
         try {
             $db = $this->dbConnect();
-            // if (!in_array($loginData['role_name'], ['super_admin', 'vendor_super_admin'])) {
-            //     throw new Exception("Permission denied. Only Admin and Super Admin can Update Details.");
-            // }
+
+            // Extracting botAction
+            $botAction = $data['botAction'];
 
             // Check if the Bot Reply ID exists and is active
-            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_store WHERE id = '{$data['id']}' AND status = 1";
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_bot_replies WHERE id = '{$botAction['id']}' AND status = 1";
             $result = $db->query($checkIdQuery);
             $rowCount = $result->fetch_assoc()['count'];
 
@@ -333,13 +439,14 @@ class BOTREPLYMODEL extends APIRESPONSE
                 return [
                     "apiStatus" => [
                         "code" => "400",
-                        "message" => "Store does not exist",
+                        "message" => "Bot Reply does not exist",
                     ],
                 ];
             }
+
             // Check if username or email already exists
-            $checkUserQuery = "SELECT COUNT(*) AS count FROM cmp_store WHERE (store_name = '{$data['storeName']}' OR email = '{$data['email']}') AND id != '{$data['id']}'";
-            //  print_r($checkUserQuery);exit;
+            $checkUserQuery = "SELECT COUNT(*) AS count FROM cmp_bot_replies WHERE name = '{$botAction['botName']}' AND id != '{$botAction['id']}'";
+            // print_r($checkUserQuery);exit;
             $userResult = $db->query($checkUserQuery);
             $userCount = $userResult->fetch_assoc()['count'];
 
@@ -348,68 +455,72 @@ class BOTREPLYMODEL extends APIRESPONSE
                 return [
                     "apiStatus" => [
                         "code" => "400",
-                        "message" => "Username or email already exists",
+                        "message" => "Bot Reply already exists",
                     ],
                 ];
             }
+            //check the trigger type
+            $triggerTypeName = $botAction['trigger']['type']; // Example: "starts_with"
+            $botReplyQuery = "SELECT id FROM cmp_mst_bot_trigger_type WHERE name = '" . $triggerTypeName . "' AND status = 1";
+            $botReplyResult = $db->query($botReplyQuery);
+            if ($botReplyResult->num_rows === 0) {
+                throw new Exception("Invalid trigger type: " . $triggerTypeName);
+            }
+            $triggerType = $botReplyResult->fetch_assoc()['id'];
 
 
             $dateNow = date("Y-m-d H:i:s", strtotime('+4 hours 30 minutes'));
             $vendorUpdated = false;
-            $userUpdated = false;
 
-            // If Store details are provided, validate and update them
-            if (isset($data['storeName']) || isset($data['email']) || isset($data['addressLine1']) || isset($data['phone'])) {
-                $validationData = array(
-                    "id" => $data['id'],
-                    "Store Name" => $data['storeName'],
-                    // "Email" => $data['email'],
-                    "Address" => $data['addressLine1'],
-                    "Phone" => $data['phone']
-                );
-                $this->validateInputDetails($validationData);
+            // Validate input data
+            $validationData = array(
+                "Name" => $botAction['botName'],
+                "Intent" => json_encode($botAction['intents']),
+                "Message Body" => json_encode($botAction['responses']),
+            );
+            $this->validateInputDetails($validationData);
 
-                $updateVendorQuery = "UPDATE cmp_store SET 
-                        store_name = '{$data['storeName']}',
-                        address_line1 = '{$data['addressLine1']}',
-                        address_line2 = '{$data['addressLine2']}',
-                        dist = '{$data['district']}',
-                        state = '{$data['state']}',
-                        pincode = '{$data['pincode']}',
-                        phone = '{$data['phone']}',
-                        email = '{$data['email']}',";
-
-                if (isset($data['activeStatus'])) {
-                    $updateVendorQuery .= " active_status = '{$data['activeStatus']}',";
-                }
-
-                $updateVendorQuery .= " updated_by = '{$loginData['user_id']}',
-                        updated_date = '{$dateNow}'
-                        WHERE id = '{$data['id']}' AND status = 1";
-                // print_r($updateVendorQuery);exit;
-
-                if ($db->query($updateVendorQuery) === false) {
-                    $db->close();
-                    return [
-                        "apiStatus" => [
-                            "code" => "500",
-                            "message" => "Unable to update Store details, please try again later",
-                        ],
-                    ];
-                }
-                $vendorUpdated = true;
+            // Start update query
+            $updateBotQuery = "UPDATE cmp_bot_replies SET 
+            name = '{$botAction['botName']}',
+            intent = '" . $db->real_escape_string(json_encode($botAction['intents'])) . "',
+            message_body = '" . $db->real_escape_string(json_encode($botAction['responses'])) . "'";
+            if (isset($botAction['trigger_type_id'])) {
+                $updateBotQuery .= ", trigger_type_id = '{$triggerType}'";
+            }
+            if (isset($botAction['message_type'])) {
+                $updateBotQuery .= ", message_type = '{$botAction['message_type']}'";
             }
 
+            // If active status is set, add it
+            if (isset($data['activeStatus'])) {
+                $updateBotQuery .= ", active_status = '{$data['activeStatus']}'";
+            }
 
+            // Always update updated_by and updated_date
+            $updateBotQuery .= ", updated_by = '{$loginData['user_id']}',
+            updated_date = '{$dateNow}'
+            WHERE id = '{$botAction['id']}' AND status = 1 
+            AND vendor_id = (SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '{$loginData['user_id']}')";
+// print_r($updateBotQuery);exit;
+            if ($db->query($updateBotQuery) === false) {
+                $db->close();
+                return [
+                    "apiStatus" => [
+                        "code" => "500",
+                        "message" => "Unable to update Bot Reply details, please try again later",
+                    ],
+                ];
+            }
+
+            $vendorUpdated = true;
             $db->close();
 
             // Construct the response message
-            $message = "Store details updated successfully";
+            $message = "Bot Reply details updated successfully";
             if ($vendorUpdated === false) {
-                $message = "No changes made to Store details";
+                $message = "No changes made to Bot Reply details";
             }
-
-
 
             return [
                 "apiStatus" => [
@@ -428,12 +539,6 @@ class BOTREPLYMODEL extends APIRESPONSE
     }
 
 
-
-
-
-
-
-
     private function deleteBotReply($data)
     {
         try {
@@ -444,7 +549,7 @@ class BOTREPLYMODEL extends APIRESPONSE
             if (empty($data[2])) {
                 throw new Exception("Invalid. Please enter your ID.");
             }
-            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_store WHERE id = $id AND status=1";
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_bot_replies WHERE id = $id AND status=1";
             // print_r($checkIdQuery);exit;
             $result = $db->query($checkIdQuery);
             $rowCount = $result->fetch_assoc()['count'];
@@ -455,14 +560,14 @@ class BOTREPLYMODEL extends APIRESPONSE
                 return array(
                     "apiStatus" => array(
                         "code" => "400",
-                        "message" => "Store does not exist",
+                        "message" => "Bot Reply does not exist",
                     ),
                 );
             }
 
             //update delete query
 
-            $deleteQuery = "UPDATE cmp_store
+            $deleteQuery = "UPDATE cmp_bot_replies
             SET status = 0 
             WHERE id = " . $id . "";
 
@@ -471,10 +576,10 @@ class BOTREPLYMODEL extends APIRESPONSE
             if ($db->query($deleteQuery) === true) {
                 $db->close();
                 $statusCode = "200";
-                $statusMessage = "Store details deleted successfully";
+                $statusMessage = "Bot Reply details deleted successfully";
             } else {
                 $statusCode = "500";
-                $statusMessage = "Unable to delete Store details, please try again later";
+                $statusMessage = "Unable to delete Bot Reply details, please try again later";
             }
             $resultArray = array(
                 "apiStatus" => array(
@@ -497,7 +602,7 @@ class BOTREPLYMODEL extends APIRESPONSE
             }
 
             $db = $this->dbConnect();
-            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_store WHERE id = $id AND status=1";
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_bot_replies WHERE id = $id AND status=1";
 
             $result = $db->query($checkIdQuery);
             $rowCount = $result->fetch_assoc()['count'];
@@ -512,15 +617,15 @@ class BOTREPLYMODEL extends APIRESPONSE
                     ),
                 );
             }
-            $ActiveQuery = "UPDATE cmp_store SET active_status = 1 WHERE status = 1 AND id = $id";
+            $ActiveQuery = "UPDATE cmp_bot_replies SET active_status = 1 WHERE status = 1 AND id = $id";
 
             if ($db->query($ActiveQuery) === true) {
                 $db->close();
                 $statusCode = "200";
-                $statusMessage = "Store activated successfully.";
+                $statusMessage = "Bot Reply activated successfully.";
             } else {
                 $statusCode = "500";
-                $statusMessage = "Unable to activate Store, please try again later.";
+                $statusMessage = "Unable to activate Bot Reply, please try again later.";
             }
             $resultArray = array(
                 "apiStatus" => array(
@@ -543,7 +648,7 @@ class BOTREPLYMODEL extends APIRESPONSE
                 throw new Exception("Bad request");
             }
             $db = $this->dbConnect();
-            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_store WHERE id = $id AND active_status=1 AND status=1";
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_bot_replies WHERE id = $id AND active_status=1 AND status=1";
             // print_r($checkIdQuery);exit;
 
             $result = $db->query($checkIdQuery);
@@ -553,7 +658,7 @@ class BOTREPLYMODEL extends APIRESPONSE
             if ($rowCount == 0) {
                 $db->close();
                 $statusCode = "400";
-                $statusMessage = "User ID does not exist.";
+                $statusMessage = "Bot Reply ID does not exist.";
                 return array(
                     "apiStatus" => array(
                         "code" => $statusCode,
@@ -561,15 +666,15 @@ class BOTREPLYMODEL extends APIRESPONSE
                     ),
                 );
             }
-            $deactiveQuery = "UPDATE cmp_store SET active_status = 0 WHERE status = 1 AND id = $id";
+            $deactiveQuery = "UPDATE cmp_bot_replies SET active_status = 0 WHERE status = 1 AND id = $id";
 
             if ($db->query($deactiveQuery) === true) {
                 $db->close();
                 $statusCode = "200";
-                $statusMessage = "Store Deactivated successfully.";
+                $statusMessage = "Bot Reply Deactivated successfully.";
             } else {
                 $statusCode = "500";
-                $statusMessage = "Unable to Deactivate Store, please try again later.";
+                $statusMessage = "Unable to Deactivate Bot Reply, please try again later.";
             }
             $resultArray = array(
                 "apiStatus" => array(
@@ -580,249 +685,6 @@ class BOTREPLYMODEL extends APIRESPONSE
             return $resultArray;
         } catch (Exception $e) {
             throw new Exception($e->getMessage());
-        }
-    }
-
-
-    public function importStoreFromExcel($data, $loginData)
-    {
-        $resultArray = [];
-        try {
-            $db = $this->dbConnect();
-
-            // Validate file upload
-            if (!isset($_FILES['file']) || $_FILES['file']['error'] != UPLOAD_ERR_OK) {
-                throw new Exception("No valid file uploaded.");
-            }
-
-            $file = $_FILES['file'];
-            $filePath = $file['tmp_name'];
-            $fileType = $file['type'];
-            $fileSize = $file['size'];
-
-            // Allowed file types
-            $allowedTypes = [
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // XLSX
-                'application/vnd.ms-excel' // XLS
-            ];
-
-            if (!in_array($fileType, $allowedTypes)) {
-                throw new Exception("Invalid file type. Please upload an Excel file.");
-            }
-
-            // Check file size (Max: 5MB)
-            if ($fileSize > 5 * 1024 * 1024) {
-                throw new Exception("File size exceeds 5MB limit.");
-            }
-
-            // Read Excel file
-            $spreadsheet = IOFactory::load($filePath);
-            $sheet = $spreadsheet->getActiveSheet();
-            $rows = $sheet->toArray(null, true, true, true);
-
-            if (empty($rows) || count($rows) < 2) {
-                throw new Exception("Excel file is empty or invalid format.");
-            }
-
-            unset($rows[1]); // Remove header row
-
-            // Get the Vendor ID from the login data
-            $user_id = $loginData['user_id'];
-            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
-            $result = $db->query($sql);
-
-            if (!$result || $result->num_rows === 0) {
-                throw new Exception("Vendor ID not found for user ID: $user_id");
-            }
-
-            $vendorRow = $result->fetch_assoc();
-            $vendor_id = $vendorRow['vendor_id'];
-            $uid = bin2hex(random_bytes(8));
-            // Process Excel Rows
-            foreach ($rows as $row) {
-                $storeName = trim($row['B']);
-                $address1   = trim($row['C']);
-                $address2   = trim($row['D']);
-                $dist   = trim($row['E']);
-                $state   = trim($row['F']);
-                $pincode   = trim($row['G']);
-                $phone     = trim($row['H']);
-                $email     = trim($row['I']);
-
-                if (empty($storeName) || empty($address1) || empty($phone) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    throw new Exception("Invalid data found in row: " . json_encode($row));
-                }
-
-                // Check if Store Exists
-                $storeQuery = "SELECT id FROM cmp_store WHERE store_name = '$storeName' LIMIT 1";
-                $storeResult = $db->query($storeQuery);
-
-                if ($storeResult->num_rows > 0) {
-                    $storeRow = $storeResult->fetch_assoc();
-                    $store_id = $storeRow['id'];
-                } else {
-
-                    // Insert Store into cmp_store
-                    $insertStoreQuery = "INSERT INTO cmp_store (uid,store_name, address_line1,address_line2,dist,state,pincode, phone, email, created_by, status) 
-                                         VALUES (' $uid ','$storeName', '$address1', '$address2', '$dist', '$state', '$pincode', '$phone', '$email', '$user_id', 1)";
-                    if (!$db->query($insertStoreQuery)) {
-                        throw new Exception("Error inserting store: " . $db->error);
-                    }
-                    $store_id = $db->insert_id;
-                }
-
-                // Check if Store is Already Mapped to Vendor
-                $mappingQuery = "SELECT id FROM cmp_vendor_store_mapping WHERE vendor_id = '$vendor_id' AND store_id = '$store_id' LIMIT 1";
-                $mappingResult = $db->query($mappingQuery);
-
-                if ($mappingResult->num_rows === 0) {
-                    // Insert Mapping into cmp_vendor_store_mapping
-                    $insertMappingQuery = "INSERT INTO cmp_vendor_store_mapping (vendor_id, store_id) VALUES ('$vendor_id', '$store_id')";
-                    if (!$db->query($insertMappingQuery)) {
-                        throw new Exception("Error mapping store to vendor: " . $db->error);
-                    }
-                }
-            }
-
-            return ["apiStatus" => ["code" => "200", "message" => "Excel file uploaded and processed successfully."]];
-        } catch (Exception $e) {
-            return ["apiStatus" => ["code" => "401", "message" => $e->getMessage()]];
-        }
-    }
-
-
-
-
-
-    //export the data to excel 
-
-    public function exportStoreToExcel($data, $loginData)
-    {
-
-        try {
-            $db = $this->dbConnect();
-            $spreadsheet = new Spreadsheet();
-            $sheet = $spreadsheet->getActiveSheet();
-
-            //Get the Contact id from the login data
-            $user_id = $loginData['user_id'];
-            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
-            $result = $db->query($sql);
-
-            if ($result) {
-                $row = $result->fetch_assoc();
-                if (!$row || !isset($row['vendor_id'])) {
-                    throw new Exception("Vendor ID not found for user ID: $user_id");
-                }
-                $vendor_id = $row['vendor_id'];
-            } else {
-                throw new Exception("Database query failed: " . $db->error);
-            }
-            // Set column headers
-            $headers = ['S.No',  'Store Name', 'Address Line 1', 'Address Line 2', 'District', 'State', 'Pincode',  'Phone', 'Email'];
-            $column = 'A';
-            foreach ($headers as $header) {
-                $sheet->setCellValue($column . '1', $header);
-                $sheet->getStyle($column . '1')->getFont()->setBold(true); // Make text bold
-                $sheet->getStyle($column . '1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER); // Center align
-                $sheet->getColumnDimension($column)->setAutoSize(true); // Auto-adjust column width
-                $column++;
-            }
-            // Fetch staff details
-            $query = "SELECT*
-             FROM cmp_store c 
-                  WHERE status = 1  AND created_by='" . $loginData['user_id'] . "'";
-            // print_r($query);exit;
-            $result = $db->query($query);
-
-            if ($result->num_rows === 0) {
-                throw new Exception("No Contact data found.");
-            }
-
-            $rowIndex = 2; // Start from row 2 (row 1 is headers)
-            $sno = 1; // Initialize serial number
-            while ($row = $result->fetch_assoc()) {
-                $column = 'A';
-                $sheet->setCellValue($column++ . $rowIndex, $sno++);
-                $sheet->setCellValue($column++ . $rowIndex, $row['store_name']);
-                $sheet->setCellValue($column++ . $rowIndex, $row['address_line1']);
-                $sheet->setCellValue($column++ . $rowIndex, $row['address_line2']);
-                $sheet->setCellValue($column++ . $rowIndex, $row['dist']);
-                $sheet->setCellValue($column++ . $rowIndex, $row['state	']);
-                $sheet->setCellValue($column++ . $rowIndex, $row['pincode	']);
-                $sheet->setCellValue($column++ . $rowIndex, $row['phone']);
-                $sheet->setCellValue($column++ . $rowIndex, $row['email']);
-                $sheet->getStyle('A' . $rowIndex . ':' . $column . $rowIndex)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER); // Center align
-                $rowIndex++;
-            }
-
-            // **Output the file directly for download**
-            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-            header('Content-Disposition: attachment; filename="Staff_Data_' . date('Ymd_His') . '.xlsx"');
-            header('Cache-Control: max-age=0');
-
-            $writer = new Xlsx($spreadsheet);
-            $writer->save('php://output'); // Send file to browser directly
-
-            exit;
-        } catch (Exception $e) {
-            return [
-                "apiStatus" => [
-                    "code" => "401",
-                    "message" => $e->getMessage()
-                ]
-            ];
-        }
-    }
-
-    public function isheaderonly($data, $loginData)
-    {
-        try {
-            $db = $this->dbConnect();
-            $spreadsheet = new Spreadsheet();
-            $sheet = $spreadsheet->getActiveSheet();
-
-            // Get the Contact id from the login data
-            $user_id = $loginData['user_id'];
-            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
-            $result = $db->query($sql);
-
-            if ($result) {
-                $row = $result->fetch_assoc();
-                if (!$row || !isset($row['vendor_id'])) {
-                    throw new Exception("Vendor ID not found for user ID: $user_id");
-                }
-                $vendor_id = $row['vendor_id'];
-            } else {
-                throw new Exception("Database query failed: " . $db->error);
-            }
-
-            // Set column headers
-            $headers = ['S.No', 'Store Name', 'Address Line 1', 'Address Line 2', 'District', 'State', 'Pincode', 'Phone', 'Email'];
-            $column = 'A';
-            foreach ($headers as $header) {
-                $sheet->setCellValue($column . '1', $header);
-                $sheet->getStyle($column . '1')->getFont()->setBold(true);
-                $sheet->getStyle($column . '1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getColumnDimension($column)->setAutoSize(true);
-                $column++;
-            }
-
-            // Output the file directly for download
-            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-            header('Content-Disposition: attachment; filename="Store_Data_' . date('Ymd_His') . '.xlsx"');
-            header('Cache-Control: max-age=0');
-
-            $writer = new Xlsx($spreadsheet);
-            $writer->save('php://output');
-            exit;
-        } catch (Exception $e) {
-            return [
-                "apiStatus" => [
-                    "code" => "401",
-                    "message" => $e->getMessage()
-                ]
-            ];
         }
     }
 
@@ -843,81 +705,81 @@ class BOTREPLYMODEL extends APIRESPONSE
         }
     }
 
-    private function getTotalCount($loginData)
-    {
-        try {
-            $db = $this->dbConnect();
-            $sql = "SELECT COUNT(cs.id) as totalStores
-        FROM cmp_store cs
-        INNER JOIN cmp_vendor_store_mapping cvsm ON cs.id = cvsm.store_id
-        INNER JOIN cmp_vendor_user_mapping cvum ON cvsm.vendor_id = cvum.vendor_id
-        WHERE cs.status = 1 AND cvum.user_id = " . $loginData['user_id'];
+    // private function getTotalCount($loginData)
+    // {
+    //     try {
+    //         $db = $this->dbConnect();
+    //         $sql = "SELECT COUNT(cs.id) as totalStores
+    //     FROM cmp_store cs
+    //     INNER JOIN cmp_vendor_store_mapping cvsm ON cs.id = cvsm.store_id
+    //     INNER JOIN cmp_vendor_user_mapping cvum ON cvsm.vendor_id = cvum.vendor_id
+    //     WHERE cs.status = 1 AND cvum.user_id = " . $loginData['user_id'];
 
 
-            $result = $db->query($sql);
-            $row = $result->fetch_assoc();
+    //         $result = $db->query($sql);
+    //         $row = $result->fetch_assoc();
 
-            return $row['totalStores'];
-        } catch (Exception $e) {
-            return array(
-                "result" => "401",
-                "message" => $e->getMessage(),
-            );
-        }
-    }
+    //         return $row['totalStores'];
+    //     } catch (Exception $e) {
+    //         return array(
+    //             "result" => "401",
+    //             "message" => $e->getMessage(),
+    //         );
+    //     }
+    // }
 
-    public function getStoredropdown($data, $loginData)
-    {
-        try {
-            $StoreDrop = array();
-            $db = $this->dbConnect();
+    // public function getStoredropdown($data, $loginData)
+    // {
+    //     try {
+    //         $StoreDrop = array();
+    //         $db = $this->dbConnect();
 
-            // Get user_id from loginData
-            $userId = $loginData['user_id'];
+    //         // Get user_id from loginData
+    //         $userId = $loginData['user_id'];
 
-            // Query to get store details based on user_id -> vendor_id -> store_id
-            $queryService = "SELECT cs.id, cs.store_name, cs.active_status
-                         FROM cmp_store cs
-                         INNER JOIN cmp_vendor_store_mapping cvsm ON cs.id = cvsm.store_id
-                         INNER JOIN cmp_vendor_user_mapping cvum ON cvsm.vendor_id = cvum.vendor_id
-                         WHERE cs.status = 1 
-                         AND cs.active_status = 1
-                         AND cvum.user_id = $userId"; // Directly using user_id
+    //         // Query to get store details based on user_id -> vendor_id -> store_id
+    //         $queryService = "SELECT cs.id, cs.store_name, cs.active_status
+    //                      FROM cmp_store cs
+    //                      INNER JOIN cmp_vendor_store_mapping cvsm ON cs.id = cvsm.store_id
+    //                      INNER JOIN cmp_vendor_user_mapping cvum ON cvsm.vendor_id = cvum.vendor_id
+    //                      WHERE cs.status = 1 
+    //                      AND cs.active_status = 1
+    //                      AND cvum.user_id = $userId"; // Directly using user_id
 
-            $result = $db->query($queryService);
+    //         $result = $db->query($queryService);
 
-            if (!$result) {
-                throw new Exception("Database Query Failed: " . $db->error);
-            }
+    //         if (!$result) {
+    //             throw new Exception("Database Query Failed: " . $db->error);
+    //         }
 
-            $row_cnt = mysqli_num_rows($result);
+    //         $row_cnt = mysqli_num_rows($result);
 
-            while ($row = mysqli_fetch_array($result, MYSQLI_ASSOC)) {
-                $StoreDrop[] = $row;
-            }
+    //         while ($row = mysqli_fetch_array($result, MYSQLI_ASSOC)) {
+    //             $StoreDrop[] = $row;
+    //         }
 
 
-            $responseArray = array(
-                "totalRecordCount" => $row_cnt,
-                "StoreDataDropDown" => $StoreDrop,
-            );
+    //         $responseArray = array(
+    //             "totalRecordCount" => $row_cnt,
+    //             "StoreDataDropDown" => $StoreDrop,
+    //         );
 
-            return array(
-                "apiStatus" => array(
-                    "code" => "200",
-                    "message" => "Store Dropdown details fetched successfully",
-                ),
-                "result" => $responseArray,
-            );
-        } catch (Exception $e) {
-            return array(
-                "apiStatus" => array(
-                    "code" => "500",
-                    "message" => "Error: " . $e->getMessage(),
-                ),
-            );
-        }
-    }
+    //         return array(
+    //             "apiStatus" => array(
+    //                 "code" => "200",
+    //                 "message" => "Store Dropdown details fetched successfully",
+    //             ),
+    //             "result" => $responseArray,
+    //         );
+    //     } catch (Exception $e) {
+    //         return array(
+    //             "apiStatus" => array(
+    //                 "code" => "500",
+    //                 "message" => "Error: " . $e->getMessage(),
+    //             ),
+    //         );
+    //     }
+    // }
 
 
     // Unautherized api request

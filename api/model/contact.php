@@ -580,14 +580,16 @@ class CONTACTMODEL extends APIRESPONSE
                 throw new Exception("Database query failed: " . $db->error);
             }
             // Check if the contact exists
-            $sql = "SELECT id FROM cmp_contact WHERE id = '" . $data['contactId'] . "' AND status = 1 AND created_by =  " . $loginData['user_id'] . " AND vendor_id = '" . $vendor_id . "'";
+            $sql = "SELECT id FROM cmp_contact WHERE id = '" . $data['contactId'] . "' AND status = 1  AND vendor_id = '" . $vendor_id . "'";
+            // print_r($sql);exit;
             $result = mysqli_query($db, $sql);
             if (!$result || mysqli_num_rows($result) === 0) {
                 throw new Exception("Contact not found");
             }
 
             // Check if Contact ID exists
-            $sql = "SELECT id FROM cmp_store WHERE id = '" . $data['storeId'] . "' AND status = 1 AND active_status = 1 ANDvendor_id = '" . $vendor_id . "'";
+            $sql = "SELECT id FROM cmp_store WHERE id = '" . $data['storeId'] . "' AND status = 1 AND active_status = 1 ";
+        //    print_r($sql);exit;
             $result = mysqli_query($db, $sql);
             if (!$result || mysqli_num_rows($result) === 0) {
                 throw new Exception('Invalid Store ID');
@@ -595,6 +597,7 @@ class CONTACTMODEL extends APIRESPONSE
 
             // Check if the mobile number already exists for another contact
             $sql = "SELECT id FROM cmp_contact WHERE mobile = '" . $data['mobile'] . "' AND id != '" . $data['contactId'] . "' AND status = 1 AND vendor_id = '" . $vendor_id . "'";
+            // print_r($sql);exit;
             $result = mysqli_query($db, $sql);
             if ($result && mysqli_num_rows($result) > 0) {
                 throw new Exception("Mobile number already exists for another contact");

@@ -58,10 +58,10 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
         $this->facebook_base_version = "v22.0";
 
         //get private tokens from DB
-        $sql = "SELECT whatsapp_business_acc_id, phone_no_id, access_token , app_id from cmp_vendor_fb_credentials where vendor_id = $vendor_id and status = 1";
+        $sql = "SELECT id,whatsapp_business_acc_id, phone_no_id, access_token , app_id from cmp_vendor_fb_credentials where vendor_id = $vendor_id and status = 1";
         $result = $db->query($sql);
         $fbData = mysqli_fetch_assoc($result);
-        // print_r($fbData);exit;
+        // print_r( $fbData['access_token']);exit;
 
         if ($fbData) {
             // $this->whatsapp_business_id = $fbData['whatsapp_business_acc_id'];
@@ -76,7 +76,6 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
 
     public function sendMessage($request, $loginData)
     {
-        // print_r($request);exit;
         if (empty($request)) {
             return [
                 "apiStatus" => [
@@ -112,23 +111,27 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
                 $mediaType = $request['media_type'] ?? null;
                 $caption = $request['caption'] ?? '';
 
-                // Handle file upload if file is present
                 if (isset($_FILES['file'])) {
-                    $fileUrl = $this->handleMediaUpload($_FILES['file'], $mediaType);
+                    $mediaId = $this->uploadMediaToMeta($_FILES['file'], $mediaType, $loginData);
                 } else {
-                    $fileUrl = $request['media_url'] ?? null;
-                }
-
-                if (!$fileUrl) {
                     return [
                         "apiStatus" => [
                             "code" => "400",
-                            "message" => "Media URL or uploaded file is required."
+                            "message" => "Uploaded file is required."
                         ]
                     ];
                 }
 
-                return $this->sendMediaMessage($recipient, $mediaType, $fileUrl, $caption, $loginData);
+                if (!$mediaId) {
+                    return [
+                        "apiStatus" => [
+                            "code" => "400",
+                            "message" => "Failed to upload media to Meta."
+                        ]
+                    ];
+                }
+
+                return $this->sendMediaMessage($recipient, $mediaType, $mediaId, $caption, $loginData);
             } else {
                 return $this->sendTextMessage($recipient, $messageBody, $loginData);
             }
@@ -142,35 +145,58 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
         }
     }
 
-    private function handleMediaUpload($file, $mediaType)
+    private function uploadMediaToMeta($file, $mediaType, $loginData)
     {
-        $uploadDir = "uploads/";
+        try {
+            $db = $this->dbConnect();
+            $user_id = $loginData['user_id'];
 
-        if ($mediaType == "image") {
-            $targetDir = $uploadDir . "image/";
-        } elseif ($mediaType == "video") {
-            $targetDir = $uploadDir . "video/";
-        } else {
-            return false;
-        }
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id";
+            $result = $db->query($sql);
+            $row = $result->fetch_assoc();
+            if (!$row || !isset($row['vendor_id'])) {
+                throw new Exception("Vendor ID not found for user ID: $user_id");
+            }
+            $vendor_id = $row['vendor_id'];
 
-        if (!is_dir($targetDir)) {
-            mkdir($targetDir, 0755, true);
-        }
+            $this->fbCredentials($vendor_id);
 
-        $fileName = time() . "_" . basename($file['name']);
-        $targetFile = $targetDir . $fileName;
+            $url = $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->phone_no_id . '/media';
 
-        if (move_uploaded_file($file['tmp_name'], $targetFile)) {
-            return "http://localhost/Biz_convo/api/" . $targetFile;
-        } else {
-            return false;
+            $postFields = [
+                'file' => new CURLFile($file['tmp_name'], $file['type'], $file['name']),
+                'type' => $mediaType,
+                'messaging_product' => 'whatsapp'
+            ];
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Authorization: Bearer ' . $this->fb_auth_token
+            ]);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            $responseData = json_decode($response, true);
+
+            if ($httpCode == 200 || $httpCode == 201) {
+                return $responseData['id']; // media_id
+            } else {
+                throw new Exception($responseData['error']['message'] ?? 'Failed to upload media.');
+            }
+        } catch (Exception $e) {
+            throw new Exception("Media upload failed: " . $e->getMessage());
         }
     }
 
-    function sendMediaMessage($recipientPhone, $mediaType, $fileUrl, $caption = '', $loginData)
+    function sendMediaMessage($recipientPhone, $mediaType, $mediaId, $caption = '', $loginData)
     {
-        if (!$recipientPhone || !$mediaType || !$fileUrl) {
+        if (!$recipientPhone || !$mediaType || !$mediaId) {
             return [
                 "apiStatus" => [
                     "code" => "400",
@@ -187,11 +213,13 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
         ];
 
         if (in_array($mediaType, ["image", "video", "audio"])) {
-            $messageData[$mediaType] = ['link' => $fileUrl, 'caption' => $caption];
+            $messageData[$mediaType] = [
+                'id' => $mediaId,
+                'caption' => $caption
+            ];
         } elseif ($mediaType === "document") {
             $messageData["document"] = [
-                'link' => $fileUrl,
-                'filename' => basename($fileUrl),
+                'id' => $mediaId,
                 'caption' => $caption
             ];
         } else {
@@ -224,7 +252,6 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
 
     private function sendRequest($data, $loginData)
     {
-        // print_r($loginData);exit;
         try {
             $db = $this->dbConnect();
             $user_id = $loginData['user_id'];
@@ -244,7 +271,7 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
 
             $this->fbCredentials($vendor_id);
             $url =  $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->phone_no_id . '/' . "messages";
-            // print_r($url);exit;
+
             $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'Authorization: Bearer ' . $this->fb_auth_token,
@@ -257,37 +284,32 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
-
             $responseData = json_decode($response, true);
+
             if ($httpCode == 200 || $httpCode == 201) {
                 $result = [
                     "message" => "Message sent successfully.",
                     "wamid" => $responseData['messages'][0]['id'] ?? null
                 ];
-                //insert the data into the database
+
                 $agentContact = $data['to'];
                 $wamId = $responseData['messages'][0]['id'];
                 $createdBy = $loginData['user_id'];
                 $messageStatus = 'sent';
                 $messageType = $data['type'];
-                // $agent = 'bot';
 
                 if (isset($data['text'])) {
                     $messageBody = $data['text']['body'];
                     $mediaLink = null;
                 } else {
-                    // For media messages like image, video, etc.
                     $messageBody = $data[$messageType]['caption'] ?? '';
-                    $mediaLink = $data[$messageType]['link'] ?? '';
+                    $mediaLink = $data[$messageType]['id'] ?? '';
                 }
 
-                // Insert into database
                 $insertmsgquery = "INSERT INTO `cmp_whatsapp_messages` 
-    (agent,agent_contact,vendor_id, wam_id, message_type, message_body, media_link, message_status, created_by) 
-    VALUES ('bot' ,'$agentContact','$vendor_id', '$wamId', '$messageType', '$messageBody', '$mediaLink', '$messageStatus', '$createdBy')";
-        // print_r($insertmsgquery);
+                    (agent, agent_contact, vendor_id, wam_id, message_type, message_body, media_link, message_status, created_by) 
+                    VALUES ('bot', '$agentContact', '$vendor_id', '$wamId', '$messageType', '$messageBody', '$mediaLink', '$messageStatus', '$createdBy')";
 
-                // print_r($insertmsgquery);exit;
                 $conn = $this->dbConnect();
                 $result11 = $conn->query($insertmsgquery);
 
@@ -317,12 +339,18 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
     }
 
 
+
     public function messagelist($data, $loginData)
     {
         try {
             $db = $this->dbConnect();
+
+
+            // print_r($this->fb_auth_token);exit;
             $recipient = isset($data['filter']['to']) ? $data['filter']['to'] : null;
             $user_id = $loginData['user_id'];
+
+
             $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id";
             $result = $db->query($sql);
 
@@ -335,17 +363,11 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
             } else {
                 throw new Exception("Database query failed: " . $db->error);
             }
-            if ($data['pageIndex'] === "") {
-                throw new Exception("pageIndex should not be empty!");
-            }
-            if ($data['dataLength'] === "") {
-                throw new Exception("dataLength should not be empty!");
-            }
+            $this->fbCredentials($vendor_id);
+            $access_token = $this->fb_auth_token;
+            $facebook_base_version = $this->facebook_base_version;
 
-            $pageIndex = (int)$data['pageIndex'];
-            $dataLength = (int)$data['dataLength'];
-            $start_index = $pageIndex * $dataLength;
-
+            // print_r($access_token);exit;
             // Get total count
             $countQuery = "SELECT COUNT(*) AS totalCount FROM cmp_whatsapp_messages WHERE status=1";
             if ($recipient) {
@@ -356,27 +378,38 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
             $recordCount = $countRow['totalCount'];
 
             // Get paginated messages
-            $query = "SELECT agent,message_type,wam_id,agent_contact, message_body,media_link, message_status, created_date,updated_date
-                      FROM cmp_whatsapp_messages  
-                      WHERE status=1 AND vendor_id = '$vendor_id'";
+            $query = "SELECT agent, message_type, wam_id, agent_contact, message_body, media_link, message_status, created_date, updated_date
+                  FROM cmp_whatsapp_messages  
+                  WHERE status=1 AND vendor_id = '$vendor_id'";
             if ($recipient) {
                 $query .= " AND agent_contact = '$recipient'";
             }
-            $query .= " ORDER BY created_by ASC 
-                        LIMIT $start_index, $dataLength";
-            // print_r($query);exit;
+            $query .= " ORDER BY created_by ASC";
 
             $result = $db->query($query);
 
             $messages = [];
             while ($row = $result->fetch_assoc()) {
-                // $messageBody = json_decode($row['message_body'], true); // Assuming message_body is JSON
-                // print_r($row);exit;
+
+                $media_url = "";
+                if (!empty($row['media_link'])) {
+                    // get the access token from the database or set it here
+                  
+                    $media_url = $this->getMetaMediaUrl($row['media_link'], $access_token,$facebook_base_version);
+
+                    // if (!empty($media_url)) {
+                    //     $saved_file = $this->downloadAndSaveMedia($media_url);
+                    //     if ($saved_file) {
+                    //         $media_url = $saved_file;
+                    //     }
+                    // }
+                }
+
                 $messages[] = [
-                    "messageAgent" => $row['agent'], // You can adjust this based on your logic
+                    "messageAgent" => $row['agent'],
                     "messageBody" => [
                         "messageText" => $row['message_body'] ?? "",
-                        "MessageMedia" => $row['media_link'] ?? ""
+                        "MessageMedia" => $media_url ?? ""
                     ],
                     "messageStatus" => $row['message_status'],
                     "time" => date("H:i:s", strtotime($row['created_date'])),
@@ -390,9 +423,8 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
                         "message" => "Message details fetched successfully"
                     ],
                     "result" => [
-                        "pageIndex" => $pageIndex,
-                        "dataLength" => $dataLength,
                         "totalRecordCount" => $recordCount,
+                        "AccessToken" => $access_token,
                         "MessageData" => $messages
                     ]
                 ];
@@ -413,6 +445,54 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
             ];
         }
     }
+
+    // Fetch Media URL from Meta
+    private function getMetaMediaUrl($media_id, $access_token, $facebook_base_version)
+    {
+        $url = "https://graph.facebook.com/{$facebook_base_version}/{$media_id}";
+// print_r($url);exit;
+        $headers = [
+            "Authorization: Bearer {$access_token}"
+        ];
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $responseData = json_decode($response, true);
+
+        return $responseData['url'] ?? "";
+    }
+
+    // Download and Save Media to your server
+    // private function downloadAndSaveMedia($media_url)
+    // {
+    //     $fileContent = @file_get_contents($media_url);
+
+    //     if ($fileContent === false) {
+    //         return false;
+    //     }
+
+    //     // Create uploads folder if not exists
+    //     $uploadDir = __DIR__ . "/uploads/";
+    //     if (!file_exists($uploadDir)) {
+    //         mkdir($uploadDir, 0777, true);
+    //     }
+
+    //     $fileName = uniqid('media_') . ".jpg"; // you can change extension if needed
+    //     $filePath = $uploadDir . $fileName;
+
+    //     file_put_contents($filePath, $fileContent);
+
+    //     // Assuming your uploads are accessible like "https://yourdomain.com/uploads/"
+    //     $server_url = "https://yourdomain.com/uploads/"; // <<<--- change this URL
+    //     return $server_url . $fileName;
+    // }
+
 
     //side contact side
 
@@ -446,7 +526,7 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
             $query = "SELECT c.id, wm.agent_contact, c.first_name, c.last_name, wm.created_date
                   FROM cmp_whatsapp_messages AS wm
                  LEFT JOIN cmp_contact AS c ON wm.agent_contact = c.mobile
-                  WHERE wm.status=1 AND wm.vendor_id = '$vendor_id'
+                  WHERE wm.status=1 AND wm.vendor_id = '$vendor_id'  AND c.vendor_id = '$vendor_id'
                   GROUP BY wm.agent_contact
                   ORDER BY wm.created_by ASC";
 
@@ -537,6 +617,8 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
                   WHERE status = 1 
                   AND vendor_id = '$vendor_id' 
                   AND mobile = '" . $db->real_escape_string($data['contactNumber']) . "'";
+            // print_r($query);exit;
+            // print_r($query);exit;
             $result = $db->query($query);
 
             if (!$result) {
@@ -549,7 +631,7 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
             }
 
             $contact = $result->fetch_assoc();
-
+            // print_r($contact);exit;
             $messages = [
                 [
                     "contactId" => $contact['id'],
@@ -560,7 +642,7 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
                     "country" => $contact['country'],
                     "contactDob" => $contact['date_of_birth'],
                     "contactAddress" => $contact['address'],
-                    "contactCompany" => $contact['company'],
+                    "contactCountry" => $contact['country'],
                     "salesamount" => $contact['sales_amount'],
                     "anniversary" => $contact['anniversary'],
                     "loyalitypoints" => $contact['loyality'],
