@@ -13,22 +13,10 @@
                         },
                         "statuses": [
                             {
-                                "id": "wamid.HBgMOTE2Mzg0NjI2NDE4FQIAERgSRDEyQzg3MkFFQjU2MTZBOEM5AA==",
-                                "status": "sent",
-                                "timestamp": "1745410711",
-                                "recipient_id": "916384626418",
-                                "conversation": {
-                                    "id": "e35e9f68e8e499409d29d4350abee04a",
-                                    "expiration_timestamp": "1745474280",
-                                    "origin": {
-                                        "type": "service"
-                                    }
-                                },
-                                "pricing": {
-                                    "billable": true,
-                                    "pricing_model": "CBP",
-                                    "category": "service"
-                                }
+                                "id": "wamid.HBgMOTE2Mzg0NjI2NDE4FQIAERgSRjk4NjgyNTg2MDM1NDYxMTMyAA==",
+                                "status": "read",
+                                "timestamp": "1745409676",
+                                "recipient_id": "916384626418"
                             }
                         ]
                     },

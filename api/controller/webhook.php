@@ -18,14 +18,11 @@ class WEBHOOK extends WEBHOOKMODEL
                 $this->verifyWebhook();                
             }
 
-            //  Handle POST request for webhook events
-            if ($method === "POST") {
-                // echo "calling";
-                file_put_contents("webhook_log.txt", date("Y-m-d H:i:s") . " - " . json_encode($data, JSON_PRETTY_PRINT) . "\n", FILE_APPEND);
-                $this->processWebhookData();
-            }
-
-
+           //  Handle POST request for webhook events
+           if ($method === "POST") {
+            file_put_contents("webhook_log.txt", date("Y-m-d H:i:s") . " - " . json_encode($data, JSON_PRETTY_PRINT) . "\n", FILE_APPEND);
+            $this->processWebhookData();
+        }
             // Return 404 for unsupported requests
             http_response_code(404);
             echo "Invalid request";
