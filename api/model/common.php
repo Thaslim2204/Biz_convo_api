@@ -28,6 +28,12 @@ class COMMONMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] === 'getmyprofile') {
                     $result = $this->getmyprofile($data, $loginData);
                     return $result;
+                } elseif ($urlParam[1] === 'vendordashboardcount') {
+                    $result = $this->vendorDashboardCount($data, $loginData);
+                    return $result;
+                } elseif ($urlParam[1] === 'getmyprofile') {
+                    $result = $this->getmyprofile($data, $loginData);
+                    return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -342,6 +348,48 @@ class COMMONMODEL extends APIRESPONSE
             ];
         }
     }
+
+    public  function vendorDashboardCount($data, $loginData)
+    {
+        try {
+            $db = $this->dbConnect();
+            $userId = $loginData['user_id'];
+            $vendorId = $this->getVendorIdByUserId($loginData);
+
+            // Query to get the dashboard count
+            $query = "SELECT * FROM cmp_dashbroad_count_vendor WHERE vendor_id = '$vendorId'";
+            $result = $db->query($query);
+
+            if (!$result) {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+
+            $row = $result->fetch_assoc();
+            $responseArray = array(
+                "contactCount" => $row['contact_count'],
+                "CampaignCount" => $row['campaign_count'],
+                "WhatsappMessageCount" => $row['whatsapp_message_count'],
+                "whatsappTemplateCount" => $row['whatsapp_template_count'],
+              
+            );
+            return array(
+                "apiStatus" => array(
+                    "code" => "200",
+                    "message" => "Dashboard count fetched successfully",
+                ),
+                "VendorDashCountData" => $responseArray,
+            );
+
+        } catch (Exception $e) {
+            return array(
+                "apiStatus" => array(
+                    "code" => "500",
+                    "message" => "Error: " . $e->getMessage(),
+                ),
+            );
+        }
+    }
+   
 
 
     /**

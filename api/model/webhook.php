@@ -3,7 +3,7 @@ require_once "include/apiResponseGenerator.php";
 require_once "include/dbConnection.php";
 
 define('WEBHOOK_VERIFY_TOKEN', 'Happy');
-define('GRAPH_API_TOKEN', 'EAAQDIH4PiBoBO6vBZAClCmyRyYIqGs73jMiC8krCZCorG2ENws1skHh1t5pjkdvXdi9kk0nsD9ljaOTiSQZB8nSj03fM22MyeLdUXmTNlw7dSfZB4Rb4LwDJOOFZBZBZBGN2jcyNkNmytjTqD16V1PL6WCGXS2HbafMcGJep5WuvtdjpC1FOWi1ruVvjiI2BcFZAWwZDZD');
+// define('GRAPH_API_TOKEN', 'EAAQDIH4PiBoBO6vBZAClCmyRyYIqGs73jMiC8krCZCorG2ENws1skHh1t5pjkdvXdi9kk0nsD9ljaOTiSQZB8nSj03fM22MyeLdUXmTNlw7dSfZB4Rb4LwDJOOFZBZBZBGN2jcyNkNmytjTqD16V1PL6WCGXS2HbafMcGJep5WuvtdjpC1FOWi1ruVvjiI2BcFZAWwZDZD');
 
 class WEBHOOKMODEL extends APIRESPONSE
 {
@@ -13,6 +13,39 @@ class WEBHOOKMODEL extends APIRESPONSE
         $conn = new DBCONNECTION();
         return $conn->connect();
     }
+
+    //get the vendor id from the session
+    public function fbCredentials($phoneId)
+    {
+        try {
+            $db = $this->dbConnect();
+            $phoneId = mysqli_real_escape_string($db, $phoneId); // Secure input
+            $query = "SELECT * FROM cmp_vendor_fb_credentials WHERE phone_no_id = '$phoneId'";
+            // print_r($query);exit;
+            $result = mysqli_query($db, $query);
+
+            if ($result && mysqli_num_rows($result) > 0) {
+                $rows = array();
+                while ($row = mysqli_fetch_assoc($result)) {
+                    $rows = $row; // Add each row to the array
+                }
+                mysqli_close($db);
+
+                return $rows; // Return the full array
+            } else {
+                throw new Exception("Vendor ID not found for the given phone number ID.");
+            }
+        } catch (Exception $e) {
+            return array(
+                "apiStatus" => array(
+                    "code" => "500",
+                    "message" => $e->getMessage(),
+                ),
+            );
+        }
+    }
+
+
 
 
 
@@ -42,7 +75,7 @@ class WEBHOOKMODEL extends APIRESPONSE
     // Process incoming POST messages
     public function processWebhookData()
     {
-        // echo"132";exit;
+
         $rawData = file_get_contents("php://input");
         $data = json_decode($rawData, true);
         // print_r($data);exit;
@@ -88,33 +121,57 @@ class WEBHOOKMODEL extends APIRESPONSE
             }
         }
 
+
         http_response_code(200);
         return json_encode(["status" => "Webhook received"]);
     }
+
+
+
     private function isMessageProcessed($messageId)
     {
-        //         $file = "processed_ids.log";
+        $file = "processed_ids.log";
 
-        //         if (!file_exists($file)) return false;
+        if (!file_exists($file)) return false;
 
-        //         $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        // // print_r($lines);exit;
-        //         return in_array($messageId, $lines);
-
+        $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        // print_r($lines);exit;
+        return in_array($messageId, $lines);
     }
 
     private function markMessageAsProcessed($messageId)
     {
-        // file_put_contents("processed_ids.log", $messageId . "\n", FILE_APPEND);
+        file_put_contents("processed_ids.log", $messageId . "\n", FILE_APPEND);
     }
 
 
     // Process individual message
     private function processMessage($businessPhoneNumberId, $message, $data)
     {
+
+        // print_r(json_encode($data));exit;
         $sender = $message['from'];
         $messageText = $message['text']['body'] ?? 'No text';
         $messageId = $message['id'];
+
+        // Detect the actual message text (text, button, or list reply)
+        $messageText = 'No text';
+
+        if (isset($message['text']['body'])) {
+            $messageText = $message['text']['body'];
+        } elseif (isset($message['interactive']['type'])) {
+            $interactiveType = $message['interactive']['type'];
+
+            if ($interactiveType === 'button_reply') {
+                $messageText = $message['interactive']['button_reply']['title'] ?? 'No text';
+            } elseif ($interactiveType === 'list_reply') {
+                $messageText = $message['interactive']['list_reply']['title'] ?? 'No text';
+            }
+        }
+        // print_r($messageText);exit;
+        //get the vendor id from the phone number id
+        $CredentialsData = $this->fbCredentials($businessPhoneNumberId);
+        $vendorId = $CredentialsData['vendor_id'];
 
         $this->storeMessageInDB($message, $data);
 
@@ -129,18 +186,22 @@ class WEBHOOKMODEL extends APIRESPONSE
                 $conditions[] = "LOWER(r.intent) LIKE '%$word%'";
             }
 
+
             $conditionStr = implode(' OR ', $conditions);
             $botQuery = "
             SELECT r.*, t.name AS trigger_type 
             FROM cmp_bot_replies r
-            JOIN cmp_mst_bot_trigger_type t ON t.id = r.trigger_type_id
-            WHERE r.status = 1 AND r.active_status = 1 AND ($conditionStr)
+            JOIN cmp_bot_trigger_type t ON t.id = r.trigger_type_id
+            WHERE r.status = 1 AND r.active_status = 1 
+           AND r.vendor_id = $vendorId
+            AND ($conditionStr)
             ORDER BY r.id DESC
             LIMIT 1
         ";
-            // print_r($botQuery);exit;
+
             $result = mysqli_query($db, $botQuery);
             $matchedReply = null;
+
 
             if ($row = mysqli_fetch_assoc($result)) {
                 $triggerType = strtolower($row['trigger_type']);
@@ -153,6 +214,7 @@ class WEBHOOKMODEL extends APIRESPONSE
 
                 $matched = false;
 
+
                 foreach ($intents as $intent) {
                     $intent = strtolower(trim($intent));
 
@@ -163,7 +225,6 @@ class WEBHOOKMODEL extends APIRESPONSE
 
                         case 'starts_with':
                             if (substr($lowerMsg, 0, strlen($intent)) == $intent) $matched = true;
-                            // print_r($intent);exit;
                             break;
 
                         case 'ends_with':
@@ -185,13 +246,12 @@ class WEBHOOKMODEL extends APIRESPONSE
                     // }
                 }
             }
-            // print_r(json_encode($matchedReply));exit;
-            // exit;
+
             if ($matchedReply) {
-                // print_r($row);exit;
+
                 $botResponses = json_decode($matchedReply['message_body'], true) ?? [];
                 $messageType = $matchedReply['message_type'];
-                // print_r(json_encode($botResponses));exit;
+// print_r($messageType);exit;
                 switch ($messageType) {
                     case 'text':
                         $replyText = $botResponses[0]['text'] ?? "Thank you for your message.";
@@ -210,26 +270,28 @@ class WEBHOOKMODEL extends APIRESPONSE
                         $buttonType = $botResponses[0]['sub_type'] ?? 'reply'; // defaulting if needed
                         $buttons = $botResponses[0]['buttons'] ?? []; // optional fallback
                         $listSections = $botResponses[0]['listSections'] ?? [];
-// print_r(json_encode($buttonType));exit;
+                        // print_r(json_encode($buttonType));exit;
                         // Remove print_r if everything works
                         $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId, $buttonType, $listSections);
                         break;
 
 
-                        case 'interactive_reply':
-                            $imageUrl = $botResponses[0]['url'] ?? '';
-                            $caption = $botResponses[0]['caption'] ?? '';
-                            $buttons = $botResponses[0]['buttons'] ?? [];
-                            $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId);
-                            break;
-    
-                        case 'interactive_cta':
-                            $imageUrl = $botResponses[0]['url'] ?? '';
-                            $caption = $botResponses[0]['caption'] ?? '';
-                            $buttons = $botResponses[0]['buttons'] ?? [];
-                            $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId);
-                            break;
-    
+                    case 'interactive_reply':
+                        $imageUrl = $botResponses[0]['url'] ?? '';
+                        $caption = $botResponses[0]['caption'] ?? '';
+                        $buttonType = $botResponses[0]['sub_type'] ?? 'reply'; // defaulting if needed
+                        $buttons = $botResponses[0]['buttons'] ?? []; // optional fallback
+                        $listSections = $botResponses[0]['listSections'] ?? [];
+                        $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId, $buttonType, $listSections);
+                        break;
+                    case 'interactive_cta':
+                        $imageUrl = $botResponses[0]['url'] ?? '';
+                        $caption = $botResponses[0]['caption'] ?? '';
+                        $buttonType = $botResponses[0]['sub_type'] ?? 'reply'; // defaulting if needed
+                        $buttons = $botResponses[0]['buttons'] ?? []; // optional fallback
+                        $listSections = $botResponses[0]['listSections'] ?? [];
+                        $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId, $buttonType, $listSections);
+                        break;
                     default:
                         $this->sendWhatsAppMessage($businessPhoneNumberId, $sender, "Thank you for your message.", $messageId);
                         break;
@@ -244,22 +306,9 @@ class WEBHOOKMODEL extends APIRESPONSE
     }
 
 
-
-
-
-
     public function storeMessageInDB($message = null, $data)
     {
         $db = $this->dbConnect();
-
-        // Get raw input if $message not passed
-        // if (!$message) {
-        //     $rawData = file_get_contents("php://input");
-        //     $data = json_decode($rawData, true);
-        // } else {
-        //     $data = $message;
-        // }
-
         $entry = $data['entry'][0]['changes'][0]['value'];
 
         $created_date = date('Y-m-d H:i:s');
@@ -361,29 +410,9 @@ class WEBHOOKMODEL extends APIRESPONSE
                 WHERE wam_id = '$wam_id'
             ";
                 mysqli_query($db, $updateQuery);
-                // } else {
-                // $insertQuery = "
-                //     INSERT INTO cmp_whatsapp_messages 
-                //     (agent, agent_contact, message_type, wam_id, message_body, message_status, created_by, created_date)
-                //     VALUES 
-                //     ('$agent', '$agent_contact', '$messageType', '$wam_id', '$messageText', '$messageStatus', '$created_by', '$created_date')
-                // ";
-                // mysqli_query($db, $insertQuery);
             }
         }
     }
-
-
-
-    // Store message in database
-    // private function storeMessageInDB($sender, $messageText)
-    // {
-    //     $db = $this->dbConnect();
-    //     $stmt = $db->prepare("INSERT INTO whatsapp_messages (sender, message, received_at) VALUES (?, ?, NOW())");
-    //     $stmt->bind_param("ss", $sender, $messageText);
-    //     $stmt->execute();
-    //     $stmt->close();
-    // }
 
     // Send WhatsApp message
     private function sendWhatsAppMessage($businessPhoneNumberId, $recipient, $text, $contextMessageId)
@@ -397,7 +426,7 @@ class WEBHOOKMODEL extends APIRESPONSE
             "context" => ["message_id" => $contextMessageId]
         ];
         // print_r($data);exit;
-        $this->makeCurlRequest($url, $data);
+        $this->makeCurlRequest($url, $data, $businessPhoneNumberId);
     }
 
     // Mark message as read
@@ -410,11 +439,11 @@ class WEBHOOKMODEL extends APIRESPONSE
             "message_id" => $messageId
         ];
 
-        $this->makeCurlRequest($url, $data);
+        $this->makeCurlRequest($url, $data, $businessPhoneNumberId);
     }
     private function sendImageMessage($businessPhoneNumberId, $recipient, $imageUrl, $caption, $contextMessageId)
     {
-        $url = "https://graph.facebook.com/v18.0/{$businessPhoneNumberId}/messages";
+        $url = "https://graph.facebook.com/v22.0/{$businessPhoneNumberId}/messages";
         $data = [
             "messaging_product" => "whatsapp",
             "to" => $recipient,
@@ -425,59 +454,20 @@ class WEBHOOKMODEL extends APIRESPONSE
             ],
             "context" => ["message_id" => $contextMessageId]
         ];
-        //  print_r($data);exit;
-        $this->makeCurlRequest($url, $data);
+        //  print_r(json_encode($data));exit;
+        $this->makeCurlRequest($url, $data, $businessPhoneNumberId);
     }
-    // private function sendInteractiveMessage($businessPhoneNumberId, $recipient, $imageUrl, $caption, $buttons, $contextMessageId)
-    // {
-    //     $url = "https://graph.facebook.com/v18.0/{$businessPhoneNumberId}/messages";
 
-    //     // Construct buttons array in the required format
-    //     $buttonComponents = [];
-    //     foreach ($buttons as $index => $btn) {
-    //         $buttonComponents[] = [
-    //             "type" => "reply",
-    //             "reply" => [
-    //                 "id" => "btn_" . ($index + 1),
-    //                 "title" => $btn['title']
-
-    //             ]
-    //         ];
-    //     }
-
-    //     $data = [
-    //         "messaging_product" => "whatsapp",
-    //         "to" => $recipient,
-    //         "type" => "interactive",
-    //         "interactive" => [
-    //             "type" => "button",
-    //             "body" => ["text" => $caption],
-    //             "header" => [
-    //                 "type" => "image",
-    //                 "image" => ["link" => $imageUrl]
-    //             ],
-    //             "action" => [
-    //                 "buttons" => $buttonComponents
-    //             ]
-    //         ],
-    //         "context" => ["message_id" => $contextMessageId]
-    //     ];
-
-    //     // print_r($data);exit;
-
-    //     $this->makeCurlRequest($url, $data);
-    // }
     private function sendInteractiveMessage($businessPhoneNumberId, $recipient, $imageUrl, $caption, $buttons, $contextMessageId, $buttonType = 'reply', $listSections = [])
     {
-        // print_r(json_encode($buttonType));exit;
-        $url = "https://graph.facebook.com/v18.0/{$businessPhoneNumberId}/messages";
+        $url = "https://graph.facebook.com/v22.0/{$businessPhoneNumberId}/messages";
         $data = [
             "messaging_product" => "whatsapp",
             "to" => $recipient,
             "type" => "interactive",
             "context" => ["message_id" => $contextMessageId]
         ];
-
+    // print_r(json_encode($data));exit;
         if ($buttonType === 'reply') {
             $buttonComponents = [];
             foreach ($buttons as $index => $btn) {
@@ -489,7 +479,7 @@ class WEBHOOKMODEL extends APIRESPONSE
                     ]
                 ];
             }
-
+    
             $data["interactive"] = [
                 "type" => "button",
                 "body" => ["text" => $caption],
@@ -501,33 +491,44 @@ class WEBHOOKMODEL extends APIRESPONSE
                     "buttons" => $buttonComponents
                 ]
             ];
-            // print_r(json_encode($data));exit;
         } elseif ($buttonType === 'cta') {
             $buttonComponents = [];
             foreach ($buttons as $btn) {
                 if (isset($btn['url'])) {
                     $buttonComponents[] = [
-                        "type" => "button",
-                        "sub_type" => "url",
-                        "index" => "0",
-                        "parameters" => [
-                            ["type" => "text", "text" => $btn['title']]
+                        "type" => "cta_url", // The type for CTA URL
+                        "action" => [
+                            "name" => "cta_url",
+                            "parameters" => [
+                                "display_text" => $btn['title'],
+                                "url" => $btn['url']
+                            ]
                         ]
                     ];
                 }
             }
-
+    
             $data["interactive"] = [
-                "type" => "button",
-                "body" => ["text" => $caption],
-                "header" => [
-                    "type" => "image",
-                    "image" => ["link" => $imageUrl]
+                "type" => "cta_url", // The type for CTA URL
+                // "header" => [
+                //     "type" => "text",
+                //     "text" => "Header Text" // Optional: You can customize the header
+                // ],
+                "body" => [
+                    "text" => $caption // The body text
                 ],
+                // "footer" => [
+                //     "text" => "Footer Text" // Optional: You can customize the footer
+                // ],
                 "action" => [
-                    "buttons" => $buttonComponents
+                    "name" => "cta_url",
+                    "parameters" => [
+                        "display_text" => $btn['title'],
+                        "url" => $btn['url']
+                    ]
                 ]
             ];
+            // print_r(json_encode($data));exit;
         } elseif ($buttonType === 'list') {
             $sections = [];
             foreach ($listSections as $section) {
@@ -544,7 +545,7 @@ class WEBHOOKMODEL extends APIRESPONSE
                     "rows" => $rows
                 ];
             }
-
+    
             $data["interactive"] = [
                 "type" => "list",
                 "body" => ["text" => $caption],
@@ -553,20 +554,22 @@ class WEBHOOKMODEL extends APIRESPONSE
                     "sections" => $sections
                 ]
             ];
+            // print_r(json_encode($data));exit;
         }
-// print_r($data);exit;
-        // print_r(json_encode($sections));exit;
-        $this->makeCurlRequest($url, $data);
+    
+        $this->makeCurlRequest($url, $data, $businessPhoneNumberId);
     }
 
 
     // Helper function to make cURL request
-    private function makeCurlRequest($url, $data)
+    private function makeCurlRequest($url, $data, $businessPhoneNumberId)
     {
+        $CredentialsData = $this->fbCredentials($businessPhoneNumberId);
+        $graphApiToken = $CredentialsData['access_token']; // Get access_token value from array
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            "Authorization: Bearer " . GRAPH_API_TOKEN,
+            "Authorization: Bearer " . $graphApiToken,
             "Content-Type: application/json"
         ]);
         curl_setopt($ch, CURLOPT_POST, 1);
@@ -576,7 +579,6 @@ class WEBHOOKMODEL extends APIRESPONSE
         $response = curl_exec($ch);
         curl_close($ch);
         print_r($response);
-        exit;
         return $response;
     }
 }

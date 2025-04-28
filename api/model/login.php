@@ -98,13 +98,15 @@ class LOGINMODEL extends APIRESPONSE
                 throw new Exception("Your Login has not actiated.");
             }
             $result = $db->query($query);
-
+// print_r($query);exit;
             if ($result) {
 
                 $row_cnt = mysqli_num_rows($result);
                 if ($row_cnt > 0) {
                     $data = mysqli_fetch_array($result, MYSQLI_ASSOC);
                     $hash = hash('sha256', hash('sha256', $request['password']));
+                    // print_r($hash);
+                    // print_r($data['password']);exit;
                     if ($hash != $data['password']) {
                         throw new Exception("Invalid password");
                     }
@@ -288,10 +290,11 @@ class LOGINMODEL extends APIRESPONSE
 
             $row_cnt = mysqli_num_rows($result);
             $data = mysqli_fetch_array($result, MYSQLI_ASSOC);
-
+// print_r($data);exit;
             if ($row_cnt < 1) {
                 throw new Exception("Unauthorized Login");
             }
+            // print_r($data);exit;
             return $data;
         } catch (Exception $e) {
             $this->loginLogCreate($e->getMessage(), "", getcwd());

@@ -344,7 +344,9 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
 
                     $updateSql = "UPDATE cmp_whatsapp_templates 
                                   SET status = 1, updated_date = NOW() 
-                                  WHERE template_id = '$template_id' AND created_by = '" . $loginData['user_id'] . "'";
+                                  WHERE
+                                     template_status = '" . $status . "' AND
+                                   template_id = '$template_id'";
                     $db->query($updateSql);
                 } else if ($template_id) {
                     // Not exists: insert new record

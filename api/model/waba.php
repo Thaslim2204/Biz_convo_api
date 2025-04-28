@@ -290,6 +290,22 @@ class WABAMODEL extends APIRESPONSE
     private function healthStatusInfo($data, $loginData)
     {
         try {
+            //get Vendor id using logindata
+            $db = $this->dbConnect();
+            $user_id = $loginData['user_id'];
+
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id";
+            $result = $db->query($sql);
+
+            if ($result) {
+                $row = $result->fetch_assoc();
+                if (!$row || !isset($row['vendor_id'])) {
+                    throw new Exception("Vendor ID not found for user ID: $user_id");
+                }
+                $vendor_id = $row['vendor_id'];
+            } else {
+                throw new Exception("Database query failed: " . $db->error);
+            }
 
             $whatsappBusinessId = $data['wa_business_acc_id'];
             $accessToken = $data['access_token'];
@@ -334,6 +350,13 @@ class WABAMODEL extends APIRESPONSE
                 throw new Exception('Curl error: ' . curl_error($curl));
             }
             if ($httpCode == "200") {
+
+                //update health status checked date into db
+                $db = $this->dbConnect();
+                $dateNow = date("Y-m-d H:i:s");
+                $update = "UPDATE cmp_vendor_fb_credentials set health_status_date = '".$dateNow."' where vendor_id = '$vendor_id'";
+                $db->query($update);
+
                 return [
                     "apiStatus" => [
                         "code" => "200",
@@ -355,6 +378,23 @@ class WABAMODEL extends APIRESPONSE
     private function getHealthStatusInfo($data, $loginData)
     {
         try {
+            //get Vendor id using logindata
+            $db = $this->dbConnect();
+            $user_id = $loginData['user_id'];
+
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id";
+            $result = $db->query($sql);
+
+            if ($result) {
+                $row = $result->fetch_assoc();
+                if (!$row || !isset($row['vendor_id'])) {
+                    throw new Exception("Vendor ID not found for user ID: $user_id");
+                }
+                $vendor_id = $row['vendor_id'];
+            } else {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+            
             $this->fbCredentials($loginData);
 
             $whatsappBusinessId = $this->whatsapp_business_id;
@@ -405,12 +445,25 @@ class WABAMODEL extends APIRESPONSE
                 throw new Exception('Curl error: ' . curl_error($curl));
             }
             if ($httpCode == "200") {
+
+                 //update health status checked date into db
+                $db = $this->dbConnect();
+                $dateNow = date("Y-m-d H:i:s");
+                $update = "UPDATE cmp_vendor_fb_credentials set health_status_date = '".$dateNow."' where vendor_id = '$vendor_id'";
+                $db->query($update);
+
+                //get healt status date
+                $get = "SELECT health_status_date from cmp_vendor_fb_credentials where vendor_id = '$vendor_id' and status = 1";
+                $result = $db->query($get);
+                $getData = mysqli_fetch_assoc($result);
+                $getDate = $getData['health_status_date'];
+                $responseData['status_checked_at'] = $getDate;
                 return [
                     "apiStatus" => [
                         "code" => "200",
                         "message" => "Health status info listed successfully.",
                     ],
-                    "result" => $responseData
+                    "result" => $responseData,
                 ];
             }
         } catch (Exception $e) {

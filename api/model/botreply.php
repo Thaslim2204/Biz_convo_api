@@ -22,6 +22,9 @@ class BOTREPLYMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] == "deactive") {
                     $result = $this->BotReplyDeactive($data, $loginData);
                     return $result;
+                } elseif ($urlParam[1] == "triggerdropdown") {
+                    $result = $this->getTriggerTypeDropdown($data, $loginData);
+                    return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -32,6 +35,9 @@ class BOTREPLYMODEL extends APIRESPONSE
                 $urlParam = explode('/', $urlPath);
                 if ($urlParam[1] === 'create') {
                     $result = $this->createBotReply($data, $loginData);
+                    return $result;
+                } elseif ($urlParam[1] === 'duplicatebotreply') {
+                    $result = $this->duplicateBotReply($data, $loginData);
                     return $result;
                 } elseif ($urlParam[1] === 'list') {
                     $result = $this->getBotReplyDetails($data, $loginData);
@@ -105,7 +111,7 @@ class BOTREPLYMODEL extends APIRESPONSE
             // Query to fetch vendors and their contact persons0
             $queryService = "SELECT mbt.name AS triggerName, br.*
                     FROM cmp_bot_replies AS br
-                    LEFT JOIN cmp_mst_bot_trigger_type AS mbt ON mbt.id = br.trigger_type_id
+                    LEFT JOIN cmp_bot_trigger_type AS mbt ON mbt.id = br.trigger_type_id
              WHERE  br.status = 1  AND br.vendor_id = (SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = " . $loginData['user_id'] . ")
                  ORDER BY br.id DESC 
                  LIMIT $start_index, $end_index";
@@ -193,7 +199,7 @@ class BOTREPLYMODEL extends APIRESPONSE
             $db = $this->dbConnect();
             $sql = "SELECT mbt.name AS triggerName, br.*
                     FROM cmp_bot_replies AS br
-                    LEFT JOIN cmp_mst_bot_trigger_type AS mbt ON mbt.id = br.trigger_type_id
+                    LEFT JOIN cmp_bot_trigger_type AS mbt ON mbt.id = br.trigger_type_id
              WHERE br.id = $id AND br.status = 1  AND br.vendor_id = (SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = " . $loginData['user_id'] . ")";
             // print_r($sql);exit;
             // Execute the query
@@ -336,6 +342,41 @@ class BOTREPLYMODEL extends APIRESPONSE
         }
     }
 
+    public function getTriggerTypeDropdown($data, $loginData)
+    {
+        try {
+            $db = $this->dbConnect();
+            $queryService = "SELECT id, name FROM cmp_bot_trigger_type WHERE status = 1 AND vendor_id = (SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = " . $loginData['user_id'] . ") ORDER BY name ASC";
+            $result = $db->query($queryService);
+            $row_cnt = mysqli_num_rows($result);
+
+            $triggerTypeDrop = array();
+            if ($row_cnt > 0) {
+                while ($row = mysqli_fetch_array($result, MYSQLI_ASSOC)) {
+                    $triggerTypeDrop[] = $row;
+                }
+            }
+
+            return array(
+                "apiStatus" => array(
+                    "code" => "200",
+                    "message" => "Trigger Type Dropdown details fetched successfully",
+                ),
+                "result" => array(
+                    "totalRecordCount" => $row_cnt,
+                    "TriggerTypeDataDropDown" => $triggerTypeDrop,
+                ),
+            );
+        } catch (Exception $e) {
+            return array(
+                "apiStatus" => array(
+                    "code" => "500",
+                    "message" => "Error: " . $e->getMessage(),
+                ),
+            );
+        }
+    }
+
 
     /**
      * Post/Add tenant
@@ -349,7 +390,7 @@ class BOTREPLYMODEL extends APIRESPONSE
         try {
             $db = $this->dbConnect();
             $botAction = $data['botAction'];
-    
+
             // Validate required input
             $validationData = array(
                 "Name" => $botAction['botName'],
@@ -357,7 +398,7 @@ class BOTREPLYMODEL extends APIRESPONSE
                 "Message Body" => json_encode($botAction['responses']),
             );
             $this->validateInputDetails($validationData);
-    
+
             $user_id = $loginData['user_id'];
             $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id";
             $result = $db->query($sql);
@@ -365,34 +406,34 @@ class BOTREPLYMODEL extends APIRESPONSE
             if (empty($vendor_id)) {
                 throw new Exception("Vendor ID not found for user ID: $user_id");
             }
-    
+
             // Check if bot name already exists
             $sql = "SELECT id FROM cmp_bot_replies WHERE name = '" . $botAction['botName'] . "' AND vendor_id = " . $vendor_id;
             $result = mysqli_query($db, $sql);
             if (mysqli_num_rows($result) > 0) {
                 throw new Exception("Bot Name already exists");
             }
-    
+
             // Validate trigger type
             $triggerTypeName = $botAction['trigger']['type'];
-            $botReplyQuery = "SELECT id FROM cmp_mst_bot_trigger_type WHERE name = '" . $triggerTypeName . "' AND status = 1";
+            $botReplyQuery = "SELECT id FROM cmp_bot_trigger_type WHERE name = '" . $triggerTypeName . "' AND vendor_id=".$vendor_id." AND status = 1";
             $botReplyResult = $db->query($botReplyQuery);
             if ($botReplyResult->num_rows === 0) {
                 throw new Exception("Invalid trigger type: " . $triggerTypeName);
             }
             $triggerType = $botReplyResult->fetch_assoc()['id'];
-    
+
             // Extract and validate message type
             $response = $botAction['responses'][0];
             $mainType = $response['type'];
             $subType = $response['sub_type'] ?? ''; // For interactive messages
             $messageType = $mainType === 'interactive' && $subType ? "{$mainType}_{$subType}" : $mainType;
-    
+
             $validTypes = ['text', 'image', 'interactive_reply', 'interactive_cta', 'interactive_list'];
             if (!in_array($messageType, $validTypes)) {
                 throw new Exception("Invalid message type: " . $messageType);
             }
-    
+
             // Type-specific validation
             switch ($mainType) {
                 case 'text':
@@ -400,18 +441,18 @@ class BOTREPLYMODEL extends APIRESPONSE
                         throw new Exception("Text response cannot be empty.");
                     }
                     break;
-    
+
                 case 'image':
                     if (empty($response['url']) || empty($response['caption'])) {
                         throw new Exception("Image URL and caption are required.");
                     }
                     break;
-    
+
                 case 'interactive':
                     if (empty($response['url']) || empty($response['caption'])) {
                         throw new Exception("Interactive message must have image URL and caption.");
                     }
-    
+
                     if ($subType === 'reply') {
                         if (empty($response['buttons']) || !is_array($response['buttons'])) {
                             throw new Exception("Reply buttons are required for reply type.");
@@ -444,17 +485,17 @@ class BOTREPLYMODEL extends APIRESPONSE
                     }
                     break;
             }
-    
+
             // Save the bot
             $name = $db->real_escape_string($botAction['botName']);
             $intent = $db->real_escape_string(json_encode($botAction['intents']));
             $messageBody = $db->real_escape_string(json_encode($botAction['responses']));
-    
+
             $insertStoreQuery = "INSERT INTO cmp_bot_replies 
                 (vendor_id, trigger_type_id, name, intent, message_type, message_body, created_by)
                 VALUES 
                 ('$vendor_id', '$triggerType', '$name', '$intent', '$messageType', '$messageBody', '$user_id')";
-    
+
             if ($db->query($insertStoreQuery) === true) {
                 $db->close();
                 $resultArray = array(
@@ -479,126 +520,228 @@ class BOTREPLYMODEL extends APIRESPONSE
         }
         return $resultArray;
     }
+    public function duplicateBotReply($data, $loginData)
+    {
+        $resultArray = array();
+        try {
+            $db = $this->dbConnect();
+    $botReplyId = $data['id'];
+            // Validate input
+            if (empty($botReplyId)) {
+                throw new Exception("Bot Reply ID is required for duplication.");
+            }
+    
+            $user_id = $loginData['user_id'];
+    
+            // Fetch the existing bot reply
+            $fetchQuery = "SELECT * FROM cmp_bot_replies WHERE id = '$botReplyId'";
+            $result = $db->query($fetchQuery);
+    
+            if ($result->num_rows === 0) {
+                throw new Exception("Bot Reply not found for the given ID.");
+            }
+    
+            $botData = $result->fetch_assoc();
+    
+            // Generate new name with random number
+            $randomNumber = rand(1000, 9999);
+            $newName = $botData['name'] . " " . $randomNumber;
+    
+            // Insert duplicated bot with new name
+            $insertQuery = "INSERT INTO cmp_bot_replies 
+                (vendor_id, trigger_type_id, name, intent, message_type, message_body, created_by)
+                VALUES 
+                (
+                    '{$botData['vendor_id']}',
+                    '{$botData['trigger_type_id']}',
+                    '" . $db->real_escape_string($newName) . "',
+                    '" . $db->real_escape_string($botData['intent']) . "',
+                    '{$botData['message_type']}',
+                    '" . $db->real_escape_string($botData['message_body']) . "',
+                    '$user_id'
+                )";
+    
+            if ($db->query($insertQuery) === true) {
+                $db->close();
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "200",
+                        "message" => "Bot Reply duplicated successfully.",
+                    ),
+                );
+            } else {
+                throw new Exception("Error while duplicating Bot Reply: " . $db->error);
+            }
+        } catch (Exception $e) {
+            if (isset($db)) {
+                $db->close();
+            }
+            $resultArray = array(
+                "apiStatus" => array(
+                    "code" => "401",
+                    "message" => $e->getMessage(),
+                ),
+            );
+        }
+        return $resultArray;
+    }
     
 
 
 
-    private function updateBotReply($data, $loginData)
+    public function updateBotReply($data, $loginData)
     {
-        // try {
-        //     $db = $this->dbConnect();
+        $resultArray = array();
+        try {
+            $db = $this->dbConnect();
+            $botAction = $data['botAction'];
 
-        //     // Extracting botAction
-        //     $botAction = $data['botAction'];
+            // Check if the Bot Reply ID exists and is active
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_bot_replies WHERE id = '{$botAction['id']}' AND status = 1";
+            $result = $db->query($checkIdQuery);
+            $rowCount = $result->fetch_assoc()['count'];
 
-        //     // Check if the Bot Reply ID exists and is active
-        //     $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_bot_replies WHERE id = '{$botAction['id']}' AND status = 1";
-        //     $result = $db->query($checkIdQuery);
-        //     $rowCount = $result->fetch_assoc()['count'];
+            if ($rowCount == 0) {
+                throw new Exception("Bot Reply does not exist.");
+            }
 
-        //     if ($rowCount == 0) {
-        //         $db->close();
-        //         return [
-        //             "apiStatus" => [
-        //                 "code" => "400",
-        //                 "message" => "Bot Reply does not exist",
-        //             ],
-        //         ];
-        //     }
+            // Check if bot name already exists for another entry
+            $checkNameQuery = "SELECT COUNT(*) AS count FROM cmp_bot_replies WHERE name = '{$botAction['botName']}' AND id != '{$botAction['id']}'";
+            // print_r($checkNameQuery);exit;
+            $result = $db->query($checkNameQuery);
+            $count = $result->fetch_assoc()['count'];
+            if ($count > 0) {
+                throw new Exception("Bot Name already exists.");
+            }
 
-        //     // Check if username or email already exists
-        //     $checkUserQuery = "SELECT COUNT(*) AS count FROM cmp_bot_replies WHERE name = '{$botAction['botName']}' AND id != '{$botAction['id']}'";
-        //     // print_r($checkUserQuery);exit;
-        //     $userResult = $db->query($checkUserQuery);
-        //     $userCount = $userResult->fetch_assoc()['count'];
+            // Validate required input
+            $validationData = array(
+                "Name" => $botAction['botName'],
+                "Intent" => json_encode($botAction['intents']),
+                "Message Body" => json_encode($botAction['responses']),
+            );
+            $this->validateInputDetails($validationData);
 
-        //     if ($userCount > 0) {
-        //         $db->close();
-        //         return [
-        //             "apiStatus" => [
-        //                 "code" => "400",
-        //                 "message" => "Bot Reply already exists",
-        //             ],
-        //         ];
-        //     }
-        //     //check the trigger type
-        //     $triggerTypeName = $botAction['trigger']['type']; // Example: "starts_with"
-        //     $botReplyQuery = "SELECT id FROM cmp_mst_bot_trigger_type WHERE name = '" . $triggerTypeName . "' AND status = 1";
-        //     $botReplyResult = $db->query($botReplyQuery);
-        //     if ($botReplyResult->num_rows === 0) {
-        //         throw new Exception("Invalid trigger type: " . $triggerTypeName);
-        //     }
-        //     $triggerType = $botReplyResult->fetch_assoc()['id'];
+            // Validate trigger type
+            $triggerTypeName = $botAction['trigger']['type'];
+            $botReplyQuery = "SELECT id FROM cmp_bot_trigger_type WHERE name = '" . $triggerTypeName . "' AND vendor_id = (SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = " . $loginData['user_id'] . ") AND status = 1";
+            $botReplyResult = $db->query($botReplyQuery);
+            if ($botReplyResult->num_rows === 0) {
+                throw new Exception("Invalid trigger type: " . $triggerTypeName);
+            }
+            $triggerType = $botReplyResult->fetch_assoc()['id'];
 
+            // Extract and validate message type
+            $response = $botAction['responses'][0];
+            $mainType = $response['type'];
+            $subType = $response['sub_type'] ?? '';
+            $messageType = $mainType === 'interactive' && $subType ? "{$mainType}_{$subType}" : $mainType;
 
-        //     $dateNow = date("Y-m-d H:i:s", strtotime('+4 hours 30 minutes'));
-        //     $vendorUpdated = false;
+            $validTypes = ['text', 'image', 'interactive_reply', 'interactive_cta', 'interactive_list'];
+            if (!in_array($messageType, $validTypes)) {
+                throw new Exception("Invalid message type: " . $messageType);
+            }
 
-        //     // Validate input data
-        //     $validationData = array(
-        //         "Name" => $botAction['botName'],
-        //         "Intent" => json_encode($botAction['intents']),
-        //         "Message Body" => json_encode($botAction['responses']),
-        //     );
-        //     $this->validateInputDetails($validationData);
+            // Type-specific validation
+            switch ($mainType) {
+                case 'text':
+                    if (empty($response['text'])) {
+                        throw new Exception("Text response cannot be empty.");
+                    }
+                    break;
+                case 'image':
+                    if (empty($response['url']) || empty($response['caption'])) {
+                        throw new Exception("Image URL and caption are required.");
+                    }
+                    break;
+                case 'interactive':
+                    if (empty($response['url']) || empty($response['caption'])) {
+                        throw new Exception("Interactive message must have image URL and caption.");
+                    }
 
-        //     // Start update query
-        //     $updateBotQuery = "UPDATE cmp_bot_replies SET 
-        //     name = '{$botAction['botName']}',
-        //     intent = '" . $db->real_escape_string(json_encode($botAction['intents'])) . "',
-        //     message_body = '" . $db->real_escape_string(json_encode($botAction['responses'])) . "'";
-        //     if (isset($botAction['trigger_type_id'])) {
-        //         $updateBotQuery .= ", trigger_type_id = '{$triggerType}'";
-        //     }
-        //     if (isset($botAction['message_type'])) {
-        //         $updateBotQuery .= ", message_type = '{$botAction['message_type']}'";
-        //     }
+                    if ($subType === 'reply') {
+                        if (empty($response['buttons']) || !is_array($response['buttons'])) {
+                            throw new Exception("Reply buttons are required for reply type.");
+                        }
+                    } elseif ($subType === 'cta') {
+                        if (empty($response['buttons']) || !is_array($response['buttons'])) {
+                            throw new Exception("CTA buttons (with URLs) are required.");
+                        }
+                        foreach ($response['buttons'] as $btn) {
+                            if (empty($btn['title']) || empty($btn['url'])) {
+                                throw new Exception("Each CTA button must have a title and URL.");
+                            }
+                        }
+                    } elseif ($subType === 'list') {
+                        if (empty($response['listSections']) || !is_array($response['listSections'])) {
+                            throw new Exception("List sections are required for list type.");
+                        }
+                        foreach ($response['listSections'] as $section) {
+                            if (empty($section['title']) || empty($section['rows']) || !is_array($section['rows'])) {
+                                throw new Exception("Each list section must have a title and rows.");
+                            }
+                            foreach ($section['rows'] as $row) {
+                                if (empty($row['id']) || empty($row['title'])) {
+                                    throw new Exception("Each row must have an ID and title.");
+                                }
+                            }
+                        }
+                    } else {
+                        throw new Exception("Unsupported interactive sub_type: " . $subType);
+                    }
+                    break;
+            }
 
-        //     // If active status is set, add it
-        //     if (isset($data['activeStatus'])) {
-        //         $updateBotQuery .= ", active_status = '{$data['activeStatus']}'";
-        //     }
+            // Final data preparation
+            $user_id = $loginData['user_id'];
+            $dateNow = date("Y-m-d H:i:s", strtotime('+4 hours 30 minutes'));
 
-        //     // Always update updated_by and updated_date
-        //     $updateBotQuery .= ", updated_by = '{$loginData['user_id']}',
-        //     updated_date = '{$dateNow}'
-        //     WHERE id = '{$botAction['id']}' AND status = 1 
-        //     AND vendor_id = (SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '{$loginData['user_id']}')";
-        //     // print_r($updateBotQuery);exit;
-        //     if ($db->query($updateBotQuery) === false) {
-        //         $db->close();
-        //         return [
-        //             "apiStatus" => [
-        //                 "code" => "500",
-        //                 "message" => "Unable to update Bot Reply details, please try again later",
-        //             ],
-        //         ];
-        //     }
+            $name = $db->real_escape_string($botAction['botName']);
+            $intent = $db->real_escape_string(json_encode($botAction['intents']));
+            $messageBody = $db->real_escape_string(json_encode($botAction['responses']));
 
-        //     $vendorUpdated = true;
-        //     $db->close();
+            $updateQuery = "UPDATE cmp_bot_replies SET
+            name = '$name',
+            trigger_type_id = '$triggerType',
+            intent = '$intent',
+            message_type = '$messageType',
+            message_body = '$messageBody',
+            updated_by = '$user_id',
+            updated_date = '$dateNow'";
 
-        //     // Construct the response message
-        //     $message = "Bot Reply details updated successfully";
-        //     if ($vendorUpdated === false) {
-        //         $message = "No changes made to Bot Reply details";
-        //     }
+            if (isset($data['activeStatus'])) {
+                $updateQuery .= ", active_status = '{$data['activeStatus']}'";
+            }
 
-        //     return [
-        //         "apiStatus" => [
-        //             "code" => "200",
-        //             "message" => $message,
-        //         ],
-        //     ];
-        // } catch (Exception $e) {
-        //     return [
-        //         "apiStatus" => [
-        //             "code" => "401",
-        //             "message" => $e->getMessage(),
-        //         ],
-        //     ];
-        // }
+            $updateQuery .= " WHERE id = '{$botAction['id']}' AND status = 1
+            AND vendor_id = (SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id')";
+
+            if ($db->query($updateQuery) === true) {
+                $db->close();
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "200",
+                        "message" => "Bot Reply successfully updated.",
+                    ),
+                );
+            } else {
+                throw new Exception("Error while updating Bot Reply: " . $db->error);
+            }
+        } catch (Exception $e) {
+            if (isset($db)) {
+                $db->close();
+            }
+            $resultArray = array(
+                "apiStatus" => array(
+                    "code" => "401",
+                    "message" => $e->getMessage(),
+                ),
+            );
+        }
+
+        return $resultArray;
     }
+
 
 
     private function deleteBotReply($data)

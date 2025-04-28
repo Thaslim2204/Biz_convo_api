@@ -31,7 +31,7 @@ class CampaignScheduler
     // Initiate FB Credentials
     private function fbCredentials($loginData)
     {
-        // print_r($loginData);
+        print_r($loginData);
         $db = $this->dbConnect();
         // Get the Contact id from the login data
         $user_id = $loginData['user_id'];
@@ -418,7 +418,7 @@ class CampaignScheduler
     public function sendMessage($data, $loginData, $campaign_id, $iscampaign)
     {
         try {
-
+// print_r($loginData);exit;
 
             $this->fbCredentials($loginData);
             if (isset($data['scheduleStatus']) && $data['scheduleStatus'] === true) {
