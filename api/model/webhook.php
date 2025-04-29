@@ -246,12 +246,12 @@ class WEBHOOKMODEL extends APIRESPONSE
                     // }
                 }
             }
-
+// print_r(    $matchedReply);exit;
             if ($matchedReply) {
 
                 $botResponses = json_decode($matchedReply['message_body'], true) ?? [];
                 $messageType = $matchedReply['message_type'];
-// print_r($messageType);exit;
+                // print_r($messageType);exit;
                 switch ($messageType) {
                     case 'text':
                         $replyText = $botResponses[0]['text'] ?? "Thank you for your message.";
@@ -270,9 +270,10 @@ class WEBHOOKMODEL extends APIRESPONSE
                         $buttonType = $botResponses[0]['sub_type'] ?? 'reply'; // defaulting if needed
                         $buttons = $botResponses[0]['buttons'] ?? []; // optional fallback
                         $listSections = $botResponses[0]['listSections'] ?? [];
-                        // print_r(json_encode($buttonType));exit;
+                        $footer = $botResponses[0]['footer'] ?? ''; // optional fallback
+                        // print_r(json_encode($footer));exit;
                         // Remove print_r if everything works
-                        $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId, $buttonType, $listSections);
+                        $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId, $buttonType, $listSections, $footer);
                         break;
 
 
@@ -282,7 +283,8 @@ class WEBHOOKMODEL extends APIRESPONSE
                         $buttonType = $botResponses[0]['sub_type'] ?? 'reply'; // defaulting if needed
                         $buttons = $botResponses[0]['buttons'] ?? []; // optional fallback
                         $listSections = $botResponses[0]['listSections'] ?? [];
-                        $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId, $buttonType, $listSections);
+                        $footer = $botResponses[0]['footer'] ?? ''; // optional fallback
+                        $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId, $buttonType, $listSections, $footer);
                         break;
                     case 'interactive_cta':
                         $imageUrl = $botResponses[0]['url'] ?? '';
@@ -290,7 +292,9 @@ class WEBHOOKMODEL extends APIRESPONSE
                         $buttonType = $botResponses[0]['sub_type'] ?? 'reply'; // defaulting if needed
                         $buttons = $botResponses[0]['buttons'] ?? []; // optional fallback
                         $listSections = $botResponses[0]['listSections'] ?? [];
-                        $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId, $buttonType, $listSections);
+                        $footer = $botResponses[0]['footer'] ?? ''; // optional fallback
+                        // print_r(json_encode($footer));exit;
+                        $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId, $buttonType, $listSections, $footer);
                         break;
                     default:
                         $this->sendWhatsAppMessage($businessPhoneNumberId, $sender, "Thank you for your message.", $messageId);
@@ -458,7 +462,7 @@ class WEBHOOKMODEL extends APIRESPONSE
         $this->makeCurlRequest($url, $data, $businessPhoneNumberId);
     }
 
-    private function sendInteractiveMessage($businessPhoneNumberId, $recipient, $imageUrl, $caption, $buttons, $contextMessageId, $buttonType = 'reply', $listSections = [])
+    private function sendInteractiveMessage($businessPhoneNumberId, $recipient, $imageUrl, $caption, $buttons, $contextMessageId, $buttonType = 'reply', $listSections = [], $footer = '')
     {
         $url = "https://graph.facebook.com/v22.0/{$businessPhoneNumberId}/messages";
         $data = [
@@ -467,7 +471,7 @@ class WEBHOOKMODEL extends APIRESPONSE
             "type" => "interactive",
             "context" => ["message_id" => $contextMessageId]
         ];
-    // print_r(json_encode($data));exit;
+        // print_r(json_encode($data));exit;
         if ($buttonType === 'reply') {
             $buttonComponents = [];
             foreach ($buttons as $index => $btn) {
@@ -479,10 +483,12 @@ class WEBHOOKMODEL extends APIRESPONSE
                     ]
                 ];
             }
-    
+
             $data["interactive"] = [
                 "type" => "button",
                 "body" => ["text" => $caption],
+                "footer"=> ["text" => $footer],
+                   
                 "header" => [
                     "type" => "image",
                     "image" => ["link" => $imageUrl]
@@ -507,7 +513,7 @@ class WEBHOOKMODEL extends APIRESPONSE
                     ];
                 }
             }
-    
+
             $data["interactive"] = [
                 "type" => "cta_url", // The type for CTA URL
                 // "header" => [
@@ -517,9 +523,9 @@ class WEBHOOKMODEL extends APIRESPONSE
                 "body" => [
                     "text" => $caption // The body text
                 ],
-                // "footer" => [
-                //     "text" => "Footer Text" // Optional: You can customize the footer
-                // ],
+                "footer" => [
+                    "text" => $footer // 
+                ],
                 "action" => [
                     "name" => "cta_url",
                     "parameters" => [
@@ -545,10 +551,11 @@ class WEBHOOKMODEL extends APIRESPONSE
                     "rows" => $rows
                 ];
             }
-    
+
             $data["interactive"] = [
                 "type" => "list",
                 "body" => ["text" => $caption],
+                "footer" => ["text" => $footer],
                 "action" => [
                     "button" => "Choose an option",
                     "sections" => $sections
@@ -556,7 +563,7 @@ class WEBHOOKMODEL extends APIRESPONSE
             ];
             // print_r(json_encode($data));exit;
         }
-    
+
         $this->makeCurlRequest($url, $data, $businessPhoneNumberId);
     }
 

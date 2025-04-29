@@ -408,7 +408,7 @@ class BOTREPLYMODEL extends APIRESPONSE
             }
 
             // Check if bot name already exists
-            $sql = "SELECT id FROM cmp_bot_replies WHERE name = '" . $botAction['botName'] . "' AND vendor_id = " . $vendor_id;
+            $sql = "SELECT id FROM cmp_bot_replies WHERE name = '" . $botAction['botName'] . "' AND Status=1 AND vendor_id = " . $vendor_id;
             $result = mysqli_query($db, $sql);
             if (mysqli_num_rows($result) > 0) {
                 throw new Exception("Bot Name already exists");
@@ -606,7 +606,8 @@ class BOTREPLYMODEL extends APIRESPONSE
             }
 
             // Check if bot name already exists for another entry
-            $checkNameQuery = "SELECT COUNT(*) AS count FROM cmp_bot_replies WHERE name = '{$botAction['botName']}' AND id != '{$botAction['id']}'";
+            $checkNameQuery = "SELECT COUNT(*) AS count FROM cmp_bot_replies WHERE name = '{$botAction['botName']}' AND id != '{$botAction['id']}' AND Status=1 AND vendor_id = (SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = " . $loginData['user_id'] . ")";
+
             // print_r($checkNameQuery);exit;
             $result = $db->query($checkNameQuery);
             $count = $result->fetch_assoc()['count'];

@@ -13,9 +13,9 @@
                         },
                         "statuses": [
                             {
-                                "id": "wamid.HBgMOTE5MDI1NzE0NDQ1FQIAERgSMjNCNzI0N0M4OEQyNkIwNkMxAA==",
-                                "status": "read",
-                                "timestamp": "1745843696",
+                                "id": "wamid.HBgMOTE5MDI1NzE0NDQ1FQIAERgSQkNFODNBMzM3MzlDRTI2Q0NEAA==",
+                                "status": "delivered",
+                                "timestamp": "1745907913",
                                 "recipient_id": "919025714445",
                                 "conversation": {
                                     "id": "5ec67afebb5b430b01a99d8d463d09dc",

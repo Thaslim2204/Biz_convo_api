@@ -74,22 +74,22 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
     {
         // print_r($loginData);
         $db = $this->dbConnect();
-// print_r($loginData);exit;
-         // Get the Contact id from the login data
-         $user_id = $loginData['user_id'];
-         $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
-         $result = $db->query($sql);
-// print
-         if ($result) {
-             $row = $result->fetch_assoc();
+        // print_r($loginData);exit;
+        // Get the Contact id from the login data
+        $user_id = $loginData['user_id'];
+        $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
+        $result = $db->query($sql);
+        // print
+        if ($result) {
+            $row = $result->fetch_assoc();
             //  print_r($row);exit;
-             if (!$row || !isset($row['vendor_id'])) {
-                 throw new Exception("Vendor ID not found for user ID: $user_id");
-             }
-             $vendor_id = $row['vendor_id'];
-         } else {
-             throw new Exception("Database query failed: " . $db->error);
-         }
+            if (!$row || !isset($row['vendor_id'])) {
+                throw new Exception("Vendor ID not found for user ID: $user_id");
+            }
+            $vendor_id = $row['vendor_id'];
+        } else {
+            throw new Exception("Database query failed: " . $db->error);
+        }
 
         $this->facebook_base_url = "https://graph.facebook.com";
         $this->facebook_base_version = "v22.0";
@@ -104,7 +104,6 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             $this->fb_auth_token = $fbData['access_token'];
             // print_r($this->fb_auth_token);exit;
             $this->facebook_app_id = $fbData['app_id'];
-            
         } else {
             throw new Exception("Failed to fetch Facebook credentials from the database.");
         }
@@ -311,7 +310,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id";
             $result = $db->query($sql);
             $vendor_id = $result->fetch_assoc()['vendor_id'];
-// print_r($vendor_id);exit;
+            // print_r($vendor_id);exit;
             // Generate unique user ID
             $uid = bin2hex(random_bytes(8));
             $sql = "SELECT id, template_id, created_date, updated_date FROM cmp_whatsapp_templates WHERE status = 1 AND vendor_id = '" . $vendor_id . "' ";
@@ -370,10 +369,10 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             $query = "SELECT * FROM cmp_whatsapp_templates WHERE status = 1 AND vendor_id = '" . $vendor_id . "' 
                 ORDER BY id DESC 
                  LIMIT $start_index, $end_index";
-                 
+
             $result = $db->query($query);
             $templates = [];
-// created_by = '" . $loginData['user_id'] . "'
+            // created_by = '" . $loginData['user_id'] . "'
             if ($result->num_rows > 0) {
                 while ($row = $result->fetch_assoc()) {
                     $templates[] = array(
@@ -535,7 +534,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
             curl_close($curl);
             $responseData = json_decode($response, true);
-// print_r($responseData);exit;
+            // print_r($responseData);exit;
 
             $approvedTemplates = [];
 
@@ -968,7 +967,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             $responseArray = [];
 
             foreach ($contacts as $contact) {
-                $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'], $template['media_id'], $iscampaign,$campaign_id);
+                $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'], $template['media_id'], $iscampaign, $campaign_id);
 
                 $body = [
                     'messaging_product' => 'whatsapp',
@@ -983,7 +982,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                         'components' => $dynamicComponents,
                     ],
                 ];
-// print_r(json_encode($body));exit;
+                // print_r(json_encode($body));exit;
                 $insertcampaign = "INSERT INTO cmp_campaign_contact(campaign_id, contact_id, created_by, created_date) VALUES('" . $campaign_id . "','" . $contact['contactId'] . "','" . $loginData['user_id'] . "', NOW())";
                 $db = $this->dbConnect();
                 $db->query($insertcampaign);
@@ -1040,12 +1039,59 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             ];
         }
     }
-
+    public function processQueue($data, $loginData, $campaign_id, $iscampaign)
+    {
+        try {
+            // print_r($data);exit;
+            $vendor_id = $this->getVendorIdByUserId($loginData);
+            $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
+            if ($fetchResponse['apiStatus']['code'] != "200") {
+                return $fetchResponse;
+            }
+            $contacts = $fetchResponse['result']['contacts'];
+            $template = $fetchResponse['result']['template'];
+            foreach ($contacts as $contact) {
+                $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'], $template['media_id'], $iscampaign, $campaign_id);
+                $body = [
+                    'messaging_product' => 'whatsapp',
+                    'recipient_type' => 'individual',
+                    'to' => $contact['mobile'],
+                    'type' => 'template',
+                    'template' => [
+                        'name' => $template['name'],
+                        'language' => [
+                            'code' => $template['language'],
+                        ],
+                        'components' => $dynamicComponents,
+                    ],
+                ];
+                // print_r(json_encode($body));exit;
+                $insertcampaign = "INSERT INTO cmp_campaign_contact(campaign_id, contact_id, created_by, created_date) VALUES('" . $campaign_id . "','" . $contact['contactId'] . "','" . $loginData['user_id'] . "', NOW())";
+                $db = $this->dbConnect();
+                $db->query($insertcampaign);
+                //store the message info into queue table
+                $body1 = json_encode($body);
+                $storeQueue = "INSERT INTO cmp_whatsapp_message_queue (vendor_id, campaign_id, phone_number, template_name, payload, message_status,created_by) VALUES ('$vendor_id','$campaign_id','" . $contact['mobile'] . "','" . $template['name'] . "','".($body1)."', 'queued','" . $loginData['user_id'] . "')";
+                // print_r($storeQueue);exit;
+                $executeStoreQ = $db->query($storeQueue);
+                if ($executeStoreQ != true) {
+                    throw new Exception("Unable to add into queue");
+                }
+            }
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "401",
+                    "message" => $e->getMessage(),
+                ],
+            ];
+        }
+    }
 
     /**
      * Prepare dynamic components based on the template and contact data
      */
-    private function prepareDynamicComponents($templateComponents, $contact, $variableIds, $mediaId, $iscampaign,$campaign_id)
+    private function prepareDynamicComponents($templateComponents, $contact, $variableIds, $mediaId, $iscampaign, $campaign_id)
     {
         // print_r((json_encode($mediaId)));
         // exit;
@@ -1072,7 +1118,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                     } else if ($component['format'] != 'TEXT') {
                         // echo "csdkf";exit;
 
-                        $dynamicComponents[] = $this->prepareHeaderMediaComponent($component, $contact, $mediaId, $iscampaign,$campaign_id);
+                        $dynamicComponents[] = $this->prepareHeaderMediaComponent($component, $contact, $mediaId, $iscampaign, $campaign_id);
                     }
                     break;
 
@@ -1142,7 +1188,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
     }
 
 
-    private function prepareHeaderMediaComponent($component, $contact, $mediaId, $iscampaign,$campaign_id)
+    private function prepareHeaderMediaComponent($component, $contact, $mediaId, $iscampaign, $campaign_id)
     {
         $db = $this->dbConnect();
         if ($iscampaign === "campaign") {

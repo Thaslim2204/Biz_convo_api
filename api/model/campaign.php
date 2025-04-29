@@ -401,7 +401,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
 
             // Send WhatsApp Message
             $call = new WHATSAPPTEMPLATEMODEL();
-            $resulthhtp= $call->sendMessage($data, $loginData, $campaign_id,"campaign");
+            $resulthhtp= $call->processQueue($data, $loginData, $campaign_id,"campaign");
             // print_r($resulthhtp['apiStatus']['code']);exit;
 
             if ($resulthhtp['apiStatus']['code'] !== "200") {
