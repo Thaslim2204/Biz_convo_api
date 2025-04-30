@@ -68,6 +68,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
     private $phone_no_id;
     private $fb_auth_token;
     private $facebook_app_id;
+    private $display_phone_no;
 
     // Initiate FB Credentials
     private function fbCredentials($loginData)
@@ -95,7 +96,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
         $this->facebook_base_version = "v22.0";
 
         //get private tokens from DB
-        $sql = "SELECT whatsapp_business_acc_id, phone_no_id, access_token , app_id from cmp_vendor_fb_credentials where vendor_id = $vendor_id and status = 1";
+        $sql = "SELECT whatsapp_business_acc_id, phone_no_id, access_token , app_id, display_phone_no from cmp_vendor_fb_credentials where vendor_id = $vendor_id and status = 1";
         $result = $db->query($sql);
         $fbData = mysqli_fetch_assoc($result);
         if ($fbData) {
@@ -104,6 +105,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             $this->fb_auth_token = $fbData['access_token'];
             // print_r($this->fb_auth_token);exit;
             $this->facebook_app_id = $fbData['app_id'];
+            $this->display_phone_no = $fbData['display_phone_no'];
         } else {
             throw new Exception("Failed to fetch Facebook credentials from the database.");
         }
@@ -460,13 +462,15 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             // echo $response;exit;
 
             $db = $this->dbConnect();
-            $sql = "SELECT id, template_id, media_id, created_date, updated_date from cmp_whatsapp_templates where status = 1 and template_id = '" . $template_id . "' AND created_by = '" . $loginData['user_id'] . "'";
+            $sql = "SELECT id, template_id, media_id, created_date, updated_date from cmp_whatsapp_templates where status = 1 and template_id = '" . $template_id . "'";
             $result = $db->query($sql);
             $dbData = $result->fetch_assoc();
             // print_r($sql);exit;
             $responseData['created_date'] = $dbData['created_date'] ?? null;
             $responseData['updated_date'] = $dbData['updated_date'] ?? null;
             $responseData['media_id'] = $dbData['media_id'] ?? null;
+            $responseData['media_id'] = $dbData['media_id'] ?? null;
+            $responseData['display_phone_no'] = $this->display_phone_no ?? null;
 
             if ($httpCode == "200") {
                 return array(
@@ -1039,19 +1043,25 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             ];
         }
     }
+
     public function processQueue($data, $loginData, $campaign_id, $iscampaign)
     {
+
         try {
-            // print_r($data);exit;
+            
             $vendor_id = $this->getVendorIdByUserId($loginData);
             $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
+
             if ($fetchResponse['apiStatus']['code'] != "200") {
                 return $fetchResponse;
             }
+
             $contacts = $fetchResponse['result']['contacts'];
             $template = $fetchResponse['result']['template'];
+
             foreach ($contacts as $contact) {
                 $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'], $template['media_id'], $iscampaign, $campaign_id);
+
                 $body = [
                     'messaging_product' => 'whatsapp',
                     'recipient_type' => 'individual',
@@ -1069,10 +1079,15 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                 $insertcampaign = "INSERT INTO cmp_campaign_contact(campaign_id, contact_id, created_by, created_date) VALUES('" . $campaign_id . "','" . $contact['contactId'] . "','" . $loginData['user_id'] . "', NOW())";
                 $db = $this->dbConnect();
                 $db->query($insertcampaign);
-                //store the message info into queue table
-                $body1 = json_encode($body);
-                $storeQueue = "INSERT INTO cmp_whatsapp_message_queue (vendor_id, campaign_id, phone_number, template_name, payload, message_status,created_by) VALUES ('$vendor_id','$campaign_id','" . $contact['mobile'] . "','" . $template['name'] . "','".($body1)."', 'queued','" . $loginData['user_id'] . "')";
-                // print_r($storeQueue);exit;
+                if ($data['scheduleStatus'] == 1) {
+                    $campaignSchedule = 1;
+                } else {
+                    $campaignSchedule = 0;
+                }
+
+                //store the message info into queue table 
+                $storeQueue = "INSERT INTO cmp_whatsapp_message_queue (vendor_id, campaign_id,campaign_schedule, phone_number, template_name, payload, message_status) VALUES ('$vendor_id','$campaign_id','$campaignSchedule','" . $contact['mobile'] . "','" . $template['name'] . "','" . json_encode($body) . "', 'queued')";
+            //    print_r($storeQueue);exit;
                 $executeStoreQ = $db->query($storeQueue);
                 if ($executeStoreQ != true) {
                     throw new Exception("Unable to add into queue");

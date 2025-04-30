@@ -75,7 +75,6 @@ class WEBHOOKMODEL extends APIRESPONSE
     // Process incoming POST messages
     public function processWebhookData()
     {
-
         $rawData = file_get_contents("php://input");
         $data = json_decode($rawData, true);
         // print_r($data);exit;
@@ -96,12 +95,12 @@ class WEBHOOKMODEL extends APIRESPONSE
                 if (!empty($change['value']['messages'])) {
                     foreach ($change['value']['messages'] as $message) {
                         $messageId = $message['id'] ?? null;
-                        if ($messageId && !$this->isMessageProcessed($messageId)) {
-                            // print_r($messageId);exit;
-                            $this->markMessageAsProcessed($messageId);
-                            $this->processMessage($phoneId, $message, $data);
-                        }
+                        // if ($messageId && !$this->isMessageProcessed($messageId)) {
+                        // print_r($messageId);exit;
+                        $this->markMessageAsProcessed($messageId);
+                        $this->processMessage($phoneId, $message, $data);
                     }
+                    // }
                 }
 
                 // Handle status updates
@@ -109,14 +108,14 @@ class WEBHOOKMODEL extends APIRESPONSE
 
                     foreach ($change['value']['statuses'] as $status) {
                         $messageId = $status['id'] ?? null;
-                        if ($messageId && !$this->isMessageProcessed($messageId)) {
-                            // print_r($messageId);exit;
-                            // print_r("status");exit;
-                            $this->markMessageAsProcessed($messageId);
-                            // print_r()
-                            $this->processMessage($phoneId, $status, $data); // Optional: You can skip status reply
-                        }
+                        // if ($messageId && !$this->isMessageProcessed($messageId)) {
+                        // print_r($messageId);exit;
+                        // print_r("status");exit;
+                        $this->markMessageAsProcessed($messageId);
+                        // print_r()
+                        $this->processMessage($phoneId, $status, $data); // Optional: You can skip status reply
                     }
+                    // }
                 }
             }
         }
@@ -130,13 +129,13 @@ class WEBHOOKMODEL extends APIRESPONSE
 
     private function isMessageProcessed($messageId)
     {
-        $file = "processed_ids.log";
+        // $file = "processed_ids.log";
 
-        if (!file_exists($file)) return false;
+        // if (!file_exists($file)) return false;
 
-        $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        // print_r($lines);exit;
-        return in_array($messageId, $lines);
+        // $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        // // print_r($lines);exit;
+        // return in_array($messageId, $lines);
     }
 
     private function markMessageAsProcessed($messageId)
@@ -148,7 +147,6 @@ class WEBHOOKMODEL extends APIRESPONSE
     // Process individual message
     private function processMessage($businessPhoneNumberId, $message, $data)
     {
-
         // print_r(json_encode($data));exit;
         $sender = $message['from'];
         $messageText = $message['text']['body'] ?? 'No text';
@@ -172,23 +170,24 @@ class WEBHOOKMODEL extends APIRESPONSE
         //get the vendor id from the phone number id
         $CredentialsData = $this->fbCredentials($businessPhoneNumberId);
         $vendorId = $CredentialsData['vendor_id'];
-
         $this->storeMessageInDB($message, $data);
 
-        if (!empty($messageText) && $messageText !== 'No text') {
-            $db = $this->dbConnect();
-            $lowerMsg = strtolower(trim($messageText));
-            $words = array_filter(explode(' ', $lowerMsg));
+        if ($messageId && !$this->isMessageProcessed($messageId)) {
 
-            $conditions = [];
-            foreach ($words as $word) {
-                $word = mysqli_real_escape_string($db, trim($word));
-                $conditions[] = "LOWER(r.intent) LIKE '%$word%'";
-            }
+            if (!empty($messageText) && $messageText !== 'No text') {
+                $db = $this->dbConnect();
+                $lowerMsg = strtolower(trim($messageText));
+                $words = array_filter(explode(' ', $lowerMsg));
+
+                $conditions = [];
+                foreach ($words as $word) {
+                    $word = mysqli_real_escape_string($db, trim($word));
+                    $conditions[] = "LOWER(r.intent) LIKE '%$word%'";
+                }
 
 
-            $conditionStr = implode(' OR ', $conditions);
-            $botQuery = "
+                $conditionStr = implode(' OR ', $conditions);
+                $botQuery = "
             SELECT r.*, t.name AS trigger_type 
             FROM cmp_bot_replies r
             JOIN cmp_bot_trigger_type t ON t.id = r.trigger_type_id
@@ -199,114 +198,124 @@ class WEBHOOKMODEL extends APIRESPONSE
             LIMIT 1
         ";
 
-            $result = mysqli_query($db, $botQuery);
-            $matchedReply = null;
+                $result = mysqli_query($db, $botQuery);
+                $matchedReply = null;
 
 
-            if ($row = mysqli_fetch_assoc($result)) {
-                $triggerType = strtolower($row['trigger_type']);
-                $rawIntent = json_decode($row['intent'], true);
-                if (is_array($rawIntent)) {
-                    $intents = $rawIntent;
-                } else {
-                    $intents = array_map('trim', explode(',', $row['intent']));
-                }
-
-                $matched = false;
-
-
-                foreach ($intents as $intent) {
-                    $intent = strtolower(trim($intent));
-
-                    switch ($triggerType) {
-                        case 'contains':
-                            if (strpos($lowerMsg, $intent) !== false) $matched = true;
-                            break;
-
-                        case 'starts_with':
-                            if (substr($lowerMsg, 0, strlen($intent)) == $intent) $matched = true;
-                            break;
-
-                        case 'ends_with':
-                            if (substr($lowerMsg, -strlen($intent)) === $intent) $matched = true;
-                            break;
-
-                        case 'exact':
-                            if ($lowerMsg === $intent) $matched = true;
-                            break;
-
-                        default:
-                            $matched = true;
-                            break;
+                if ($row = mysqli_fetch_assoc($result)) {
+                    $triggerType = strtolower($row['trigger_type']);
+                    $rawIntent = json_decode($row['intent'], true);
+                    if (is_array($rawIntent)) {
+                        $intents = $rawIntent;
+                    } else {
+                        $intents = array_map('trim', explode(',', $row['intent']));
                     }
 
-                    // if ($matched  ) {
-                    $matchedReply = $row;
-                    //     break;
-                    // }
+                    $matched = false;
+
+
+                    foreach ($intents as $intent) {
+                        $intent = strtolower(trim($intent));
+
+                        switch ($triggerType) {
+                            case 'contains':
+                                if (strpos($lowerMsg, $intent) !== false) $matched = true;
+                                break;
+
+                            case 'starts_with':
+                                if (substr($lowerMsg, 0, strlen($intent)) == $intent) $matched = true;
+                                break;
+
+                            case 'ends_with':
+                                if (substr($lowerMsg, -strlen($intent)) === $intent) $matched = true;
+                                break;
+
+                            case 'exact':
+                                if ($lowerMsg === $intent) $matched = true;
+                                break;
+
+                            default:
+                                $matched = true;
+                                break;
+                        }
+
+                        // if ($matched  ) {
+                        $matchedReply = $row;
+                        //     break;
+                        // }
+                    }
                 }
-            }
-// print_r(    $matchedReply);exit;
-            if ($matchedReply) {
+                // print_r(    $matchedReply);exit;
+                if ($matchedReply) {
 
-                $botResponses = json_decode($matchedReply['message_body'], true) ?? [];
-                $messageType = $matchedReply['message_type'];
-                // print_r($messageType);exit;
-                switch ($messageType) {
-                    case 'text':
-                        $replyText = $botResponses[0]['text'] ?? "Thank you for your message.";
-                        $this->sendWhatsAppMessage($businessPhoneNumberId, $sender, $replyText, $messageId);
-                        break;
+                    $botResponses = json_decode($matchedReply['message_body'], true) ?? [];
+                    $messageType = $matchedReply['message_type'];
+                    // print_r($messageType);exit;
+                    switch ($messageType) {
+                        case 'text':
+                            $replyText = $botResponses[0]['text'] ?? "Thank you for your message.";
+                            $this->sendWhatsAppMessage($businessPhoneNumberId, $sender, $replyText, $messageId);
+                            break;
 
-                    case 'image':
-                        $imageUrl = $botResponses[0]['url'] ?? '';
-                        $caption = $botResponses[0]['caption'] ?? '';
-                        $this->sendImageMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $messageId);
-                        break;
-
-                    case 'interactive_list':
-                        $imageUrl = $botResponses[0]['url'] ?? '';
-                        $caption = $botResponses[0]['caption'] ?? '';
-                        $buttonType = $botResponses[0]['sub_type'] ?? 'reply'; // defaulting if needed
-                        $buttons = $botResponses[0]['buttons'] ?? []; // optional fallback
-                        $listSections = $botResponses[0]['listSections'] ?? [];
-                        $footer = $botResponses[0]['footer'] ?? ''; // optional fallback
-                        // print_r(json_encode($footer));exit;
-                        // Remove print_r if everything works
-                        $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId, $buttonType, $listSections, $footer);
-                        break;
+                        // case 'image':
+                        //     $imageUrl = $botResponses[0]['url'] ?? '';
+                        //     $caption = $botResponses[0]['caption'] ?? '';
+                        //     $this->sendImageMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $messageId);
+                        //     break;
+                        case 'image':
+                        case 'video':
+                        case 'document':
+                            $mediaUrl = $botResponses[0]['url'] ?? '';
+                            $caption = $botResponses[0]['caption'] ?? '';
+                            // print_r($botResponses);exit;
+                            $this->sendMediaMessage($businessPhoneNumberId, $sender, $botResponses[0]['type'], $mediaUrl, $caption, $messageId);
+                            break;
 
 
-                    case 'interactive_reply':
-                        $imageUrl = $botResponses[0]['url'] ?? '';
-                        $caption = $botResponses[0]['caption'] ?? '';
-                        $buttonType = $botResponses[0]['sub_type'] ?? 'reply'; // defaulting if needed
-                        $buttons = $botResponses[0]['buttons'] ?? []; // optional fallback
-                        $listSections = $botResponses[0]['listSections'] ?? [];
-                        $footer = $botResponses[0]['footer'] ?? ''; // optional fallback
-                        $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId, $buttonType, $listSections, $footer);
-                        break;
-                    case 'interactive_cta':
-                        $imageUrl = $botResponses[0]['url'] ?? '';
-                        $caption = $botResponses[0]['caption'] ?? '';
-                        $buttonType = $botResponses[0]['sub_type'] ?? 'reply'; // defaulting if needed
-                        $buttons = $botResponses[0]['buttons'] ?? []; // optional fallback
-                        $listSections = $botResponses[0]['listSections'] ?? [];
-                        $footer = $botResponses[0]['footer'] ?? ''; // optional fallback
-                        // print_r(json_encode($footer));exit;
-                        $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId, $buttonType, $listSections, $footer);
-                        break;
-                    default:
-                        $this->sendWhatsAppMessage($businessPhoneNumberId, $sender, "Thank you for your message.", $messageId);
-                        break;
+                        case 'interactive_list':
+                            $imageUrl = $botResponses[0]['url'] ?? '';
+                            $caption = $botResponses[0]['caption'] ?? '';
+                            $buttonType = $botResponses[0]['sub_type'] ?? 'reply'; // defaulting if needed
+                            $buttons = $botResponses[0]['buttons'] ?? []; // optional fallback
+                            $listSections = $botResponses[0]['listSections'] ?? [];
+                            $footer = $botResponses[0]['footer'] ?? ''; // optional fallback
+                            // print_r(json_encode($footer));exit;
+                            // Remove print_r if everything works
+                            $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId, $buttonType, $listSections, $footer);
+                            break;
+
+
+                        case 'interactive_reply':
+                            $imageUrl = $botResponses[0]['url'] ?? '';
+                            $caption = $botResponses[0]['caption'] ?? '';
+                            $buttonType = $botResponses[0]['sub_type'] ?? 'reply'; // defaulting if needed
+                            $buttons = $botResponses[0]['buttons'] ?? []; // optional fallback
+                            $listSections = $botResponses[0]['listSections'] ?? [];
+                            $footer = $botResponses[0]['footer'] ?? ''; // optional fallback
+                            $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId, $buttonType, $listSections, $footer);
+                            break;
+                        case 'interactive_cta':
+                            $imageUrl = $botResponses[0]['url'] ?? '';
+                            $caption = $botResponses[0]['caption'] ?? '';
+                            $buttonType = $botResponses[0]['sub_type'] ?? 'reply'; // defaulting if needed
+                            $buttons = $botResponses[0]['buttons'] ?? []; // optional fallback
+                            $listSections = $botResponses[0]['listSections'] ?? [];
+                            $footer = $botResponses[0]['footer'] ?? ''; // optional fallback
+                            // print_r(json_encode($footer));exit;
+                            $this->sendInteractiveMessage($businessPhoneNumberId, $sender, $imageUrl, $caption, $buttons, $messageId, $buttonType, $listSections, $footer);
+                            break;
+                        default:
+                            $this->sendWhatsAppMessage($businessPhoneNumberId, $sender, "Thank you for your message.", $messageId);
+                            break;
+                    }
+                } else {
+                    $this->sendWhatsAppMessage($businessPhoneNumberId, $sender, "Sorry, I didn't understand. Please try again.", $messageId);
                 }
-            } else {
-                $this->sendWhatsAppMessage($businessPhoneNumberId, $sender, "Sorry, I didn't understand. Please try again.", $messageId);
+                mysqli_close($db);
             }
-            mysqli_close($db);
+
+            $this->markMessageAsRead($businessPhoneNumberId, $messageId);
         }
-
-        $this->markMessageAsRead($businessPhoneNumberId, $messageId);
     }
 
 
@@ -358,7 +367,7 @@ class WEBHOOKMODEL extends APIRESPONSE
             $phoneNumberId = $data['entry'][0]['changes'][0]['value']['metadata']['phone_number_id'];
             $checkQuery = "SELECT id FROM cmp_whatsapp_messages WHERE wam_id = '$wam_id' LIMIT 1";
             $result = mysqli_query($db, $checkQuery);
-
+            // echo"12121";exit;
             if (mysqli_num_rows($result) > 0) {
                 $updateQuery = "
                     UPDATE cmp_whatsapp_messages 
@@ -378,6 +387,7 @@ class WEBHOOKMODEL extends APIRESPONSE
                     VALUES 
                     ('$vendor_id', '$agent', '$agent_contact', '$messageType', '$wam_id', '$messageText', '$mediaLink', '$messageStatus', '$message_datetime')
                 ";
+                // print_r($insertQuery);
                 mysqli_query($db, $insertQuery);
             }
         }
@@ -415,6 +425,29 @@ class WEBHOOKMODEL extends APIRESPONSE
             ";
                 mysqli_query($db, $updateQuery);
             }
+
+            //query to update the queue status in db
+            // Check in queue table
+            $checkQueueQuery = "SELECT id FROM cmp_whatsapp_message_queue WHERE wam_id = '$wam_id' LIMIT 1";
+            // print_r($checkQueueQuery);?
+            $queueResult = mysqli_query($db, $checkQueueQuery);
+            $updated_date = date('Y-m-d H:i:s');
+            if (mysqli_num_rows($queueResult) > 0) {
+                // Update queue table
+
+                $updateQueueQuery = "
+                UPDATE cmp_whatsapp_message_queue
+                SET message_status = '$messageStatus',
+                updated_date = '$updated_date'
+                
+            ";
+                if (isset($status['errors'])) {
+                    $updateQueueQuery .= " ,error_message = '" . mysqli_real_escape_string($db, $status['errors'][0]['error_data']['details']) . "'";
+                }
+                $updateQueueQuery .= " WHERE wam_id = '$wam_id'";
+                mysqli_query($db, $updateQueueQuery);
+            }
+            // print_r($updateQueueQuery);
         }
     }
 
@@ -445,25 +478,46 @@ class WEBHOOKMODEL extends APIRESPONSE
 
         $this->makeCurlRequest($url, $data, $businessPhoneNumberId);
     }
-    private function sendImageMessage($businessPhoneNumberId, $recipient, $imageUrl, $caption, $contextMessageId)
+    private function sendMediaMessage($businessPhoneNumberId, $recipient, $mediaType, $mediaUrl, $caption = '', $contextMessageId = null)
     {
         $url = "https://graph.facebook.com/v22.0/{$businessPhoneNumberId}/messages";
+
         $data = [
             "messaging_product" => "whatsapp",
             "to" => $recipient,
-            "type" => "image",
-            "image" => [
-                "link" => $imageUrl,
-                "caption" => $caption
-            ],
-            "context" => ["message_id" => $contextMessageId]
+            "type" => $mediaType,
+            $mediaType => [
+                "link" => $mediaUrl
+            ]
         ];
-        //  print_r(json_encode($data));exit;
+        // print_r($mediaType);exit;
+        // Add caption if provided (only applicable for image/video/document)
+        if (!empty($caption) && in_array($mediaType, ['image', 'video', 'document'])) {
+            $data[$mediaType]['caption'] = $caption;
+        }
+        // Add filename only for document
+        if ($mediaType === 'document') {
+            // Extract filename from URL
+            $parsedUrl = parse_url($mediaUrl);
+            $path = $parsedUrl['path'] ?? '';
+            $filename = basename($path);
+            $data[$mediaType]['filename'] = $filename;
+        }
+
+        // Add context if replying to a specific message
+        if (!empty($contextMessageId)) {
+            $data["context"] = ["message_id" => $contextMessageId];
+        }
+
+        // Debug print
+        // print_r(json_encode($data)); exit;
+
         $this->makeCurlRequest($url, $data, $businessPhoneNumberId);
     }
 
     private function sendInteractiveMessage($businessPhoneNumberId, $recipient, $imageUrl, $caption, $buttons, $contextMessageId, $buttonType = 'reply', $listSections = [], $footer = '')
     {
+        // print_r($buttonType);exit;
         $url = "https://graph.facebook.com/v22.0/{$businessPhoneNumberId}/messages";
         $data = [
             "messaging_product" => "whatsapp",
@@ -487,8 +541,8 @@ class WEBHOOKMODEL extends APIRESPONSE
             $data["interactive"] = [
                 "type" => "button",
                 "body" => ["text" => $caption],
-                "footer"=> ["text" => $footer],
-                   
+                "footer" => ["text" => $footer],
+
                 "header" => [
                     "type" => "image",
                     "image" => ["link" => $imageUrl]
@@ -497,6 +551,7 @@ class WEBHOOKMODEL extends APIRESPONSE
                     "buttons" => $buttonComponents
                 ]
             ];
+            // print_r(json_encode($data));exit;
         } elseif ($buttonType === 'cta') {
             $buttonComponents = [];
             foreach ($buttons as $btn) {

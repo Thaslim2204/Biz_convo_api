@@ -108,6 +108,12 @@ class BOTREPLYMODEL extends APIRESPONSE
             $start_index = $data['pageIndex'] * $data['dataLength'];
             $end_index = $data['dataLength'];
 
+            //count for total records
+            $queryCount = "SELECT COUNT(*) AS total FROM cmp_bot_replies WHERE status = 1 AND vendor_id = (SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = " . $loginData['user_id'] . ")";
+            $resultCount = $db->query($queryCount);
+            $rowCount = $resultCount->fetch_assoc();
+            $totalRecordCount = $rowCount['total'];
+
             // Query to fetch vendors and their contact persons0
             $queryService = "SELECT mbt.name AS triggerName, br.*
                     FROM cmp_bot_replies AS br
@@ -146,7 +152,7 @@ class BOTREPLYMODEL extends APIRESPONSE
             $responseArray = array(
                 "pageIndex" => $data['pageIndex'],
                 "dataLength" => $data['dataLength'],
-                "totalRecordCount" => $row_cnt,
+                "totalRecordCount" => $totalRecordCount,
                 "BotReplyData" => $BotReply,
             );
 
@@ -266,58 +272,66 @@ class BOTREPLYMODEL extends APIRESPONSE
             if (!isset($_FILES['file']) || empty($_FILES['file']['name'])) {
                 throw new Exception("No file uploaded or file name is empty.");
             }
-
+    
             $file = $_FILES['file'];
             $fileName = $file['name'];
             $tempPath = $file['tmp_name'];
             $fileSize = $file['size'];
             $fileType = mime_content_type($tempPath); // More reliable type check
-
+    
             $db = $this->dbConnect();
-
+    
             // Define the base upload path
             $basePath = 'uploads/botmedia/';
             $uploadPath = '';
-
-            // Determine file category by mime type
-            if (strpos($fileType, 'image') !== false) {
+    
+            // Prepare the file extension
+            $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+    
+            // Allowed types for validation
+            $allowedImages = ['jpg', 'jpeg', 'png'];
+            $allowedVideos = ['mp4', 'mov', 'avi', 'mkv'];
+            $allowedDocuments = ['pdf', 'doc', 'docx', 'xls', 'xlsx'];
+    
+            // Determine file category by mime type and extension
+            if (strpos($fileType, 'image') !== false && in_array($fileExt, $allowedImages)) {
                 $uploadPath = $basePath . 'images/';
-            } elseif (strpos($fileType, 'video') !== false) {
+            } elseif (strpos($fileType, 'video') !== false && in_array($fileExt, $allowedVideos)) {
                 $uploadPath = $basePath . 'videos/';
             } elseif (
-                strpos($fileType, 'application/pdf') !== false ||
-                strpos($fileType, 'application/msword') !== false ||
-                strpos($fileType, 'application/vnd.openxmlformats-officedocument') !== false
+                (strpos($fileType, 'application/pdf') !== false || 
+                 strpos($fileType, 'application/msword') !== false || 
+                 strpos($fileType, 'application/vnd.openxmlformats-officedocument') !== false) 
+                 && in_array($fileExt, $allowedDocuments)
             ) {
                 $uploadPath = $basePath . 'documents/';
             } else {
-                throw new Exception("Unsupported file type.");
+                throw new Exception("Unsupported or mismatched file type.");
             }
-
+    
             // Create directory if not exists
             if (!is_dir($uploadPath)) {
                 mkdir($uploadPath, 0777, true);
             }
-
-            // Validate file size (limit 5MB)
+    
+            // Validate file size (limit 10MB)
             if ($fileSize > 10000000) {
                 throw new Exception("File is too large! Maximum allowed size is 10 MB.");
             }
-
-            // Prepare the file name
-            $fileExt = pathinfo($fileName, PATHINFO_EXTENSION);
+    
+            // Clean and rename file
             $baseName = pathinfo($fileName, PATHINFO_FILENAME);
             $timeStamp = date('ymdHis');
             $cleanName = preg_replace('/\s+/', '', $baseName);
-            $alteredName = $cleanName . "_" . $timeStamp . "." . strtolower($fileExt);
-
+            $alteredName = $cleanName . "_" . $timeStamp . "." . $fileExt;
+    
             $finalPath = $uploadPath . $alteredName;
-
+    
             // Move the uploaded file
             if (!move_uploaded_file($tempPath, $finalPath)) {
                 throw new Exception("Failed to move uploaded file.");
             }
-
+    
             // Success Response
             $responseData = array(
                 "apiStatus" => array(
@@ -330,7 +344,7 @@ class BOTREPLYMODEL extends APIRESPONSE
                     "Path" => $finalPath,
                 ),
             );
-
+    
             return $responseData;
         } catch (Exception $e) {
             return array(
@@ -341,6 +355,7 @@ class BOTREPLYMODEL extends APIRESPONSE
             );
         }
     }
+    
 
     public function getTriggerTypeDropdown($data, $loginData)
     {
@@ -429,7 +444,7 @@ class BOTREPLYMODEL extends APIRESPONSE
             $subType = $response['sub_type'] ?? ''; // For interactive messages
             $messageType = $mainType === 'interactive' && $subType ? "{$mainType}_{$subType}" : $mainType;
 
-            $validTypes = ['text', 'image', 'interactive_reply', 'interactive_cta', 'interactive_list'];
+            $validTypes = ['text', 'image', 'video','document','interactive_reply', 'interactive_cta', 'interactive_list'];
             if (!in_array($messageType, $validTypes)) {
                 throw new Exception("Invalid message type: " . $messageType);
             }
@@ -443,6 +458,8 @@ class BOTREPLYMODEL extends APIRESPONSE
                     break;
 
                 case 'image':
+                case 'video':
+                case 'document':
                     if (empty($response['url']) || empty($response['caption'])) {
                         throw new Exception("Image URL and caption are required.");
                     }
@@ -638,7 +655,7 @@ class BOTREPLYMODEL extends APIRESPONSE
             $subType = $response['sub_type'] ?? '';
             $messageType = $mainType === 'interactive' && $subType ? "{$mainType}_{$subType}" : $mainType;
 
-            $validTypes = ['text', 'image', 'interactive_reply', 'interactive_cta', 'interactive_list'];
+            $validTypes = ['text', 'image','video','document', 'interactive_reply', 'interactive_cta', 'interactive_list'];
             if (!in_array($messageType, $validTypes)) {
                 throw new Exception("Invalid message type: " . $messageType);
             }
@@ -651,6 +668,8 @@ class BOTREPLYMODEL extends APIRESPONSE
                     }
                     break;
                 case 'image':
+                case 'video':
+                case 'document':
                     if (empty($response['url']) || empty($response['caption'])) {
                         throw new Exception("Image URL and caption are required.");
                     }

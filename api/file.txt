@@ -1,1 +1,0 @@
-CampaignID: 4 | Timezone: Asia/Kolkata | ScheduleAt: 2025-04-17 20:30:00 | Status: Scheduled

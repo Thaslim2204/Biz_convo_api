@@ -29,24 +29,48 @@ class CampaignScheduler
     private $facebook_app_id;
 
     // Initiate FB Credentials
-    private function fbCredentials($loginData)
+    private function fbCredentials($vid)
     {
-        print_r($loginData);
+        // print_r($vid);exit;
         $db = $this->dbConnect();
         // Get the Contact id from the login data
-        $user_id = $loginData['user_id'];
-        $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
-        $result = $db->query($sql);
+        // $user_id = $loginData;
+        // $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
+        // $result = $db->query($sql);
 
-        if ($result) {
-            $row = $result->fetch_assoc();
-            if (!$row || !isset($row['vendor_id'])) {
-                throw new Exception("Vendor ID not found for user ID: $user_id");
-            }
-            $vendor_id = $row['vendor_id'];
+        // if ($result) {
+        //     $row = $result->fetch_assoc();
+        //     if (!$row || !isset($row['vendor_id'])) {
+        //         throw new Exception("Vendor ID not found for user ID: $user_id");
+        //     }
+        //     $vendor_id = $row['vendor_id'];
+        // } else {
+        //     throw new Exception("Database query failed: " . $db->error);
+        // }
+        $vendor_id = $vid;
+        $this->facebook_base_url = "https://graph.facebook.com";
+        $this->facebook_base_version = "v22.0";
+
+        //get private tokens from DB
+        $sql = "SELECT whatsapp_business_acc_id, phone_no_id, access_token , app_id from cmp_vendor_fb_credentials where vendor_id = $vendor_id and status = 1";
+        // print_r($sql);exit;
+        $result = $db->query($sql);
+        $fbData = mysqli_fetch_assoc($result);
+        // print_r($fbData);exit;
+        if ($fbData) {
+            $this->whatsapp_business_id = $fbData['whatsapp_business_acc_id'];
+            $this->phone_no_id = $fbData['phone_no_id'];
+            $this->fb_auth_token = $fbData['access_token'];
+            $this->facebook_app_id = $fbData['app_id'];
         } else {
-            throw new Exception("Database query failed: " . $db->error);
+            throw new Exception("Failed to fetch Facebook credentials from the database.");
         }
+    }
+
+    private function fbCredentialsUsingVendorId($vendor_id)
+    {
+        // print_r($loginData);
+        $db = $this->dbConnect();
 
         $this->facebook_base_url = "https://graph.facebook.com";
         $this->facebook_base_version = "v22.0";
@@ -61,37 +85,40 @@ class CampaignScheduler
             $this->phone_no_id = $fbData['phone_no_id'];
             $this->fb_auth_token = $fbData['access_token'];
             $this->facebook_app_id = $fbData['app_id'];
-        } else {
-            throw new Exception("Failed to fetch Facebook credentials from the database.");
         }
     }
 
     public function run()
     {
+
         if (!file_exists($this->filePath)) {
             echo "📂 file.txt not found. Nothing to send.\n";
             return;
         }
-
         $this->checkAndSend();
+        $this->executeQueue();
     }
 
     private function checkAndSend()
     {
         $db = $this->dbConnect();
         $data = file_get_contents($this->filePath);
-
+// print_r(    $data);exit;
         // Extract parts using regex
+        preg_match('/vendorId:\s*(\d+)/', $data, $matchvid);
         preg_match('/CampaignID:\s*(\d+)/', $data, $matchCampaign);
         preg_match('/Timezone:\s*([^\|]+)/', $data, $matchTimezone);
         preg_match('/ScheduleAt:\s*([^\|]+)/', $data, $matchSchedule);
+        preg_match('/createdBy:\s*([^\|]+)/', $data, $matchcreatedBy);
         preg_match('/Status:\s*(\w+)/', $data, $matchStatus);
-
+        // print_r($matchvid);exit;
+        $vid = isset($matchvid[1]) ? trim($matchvid[1]) : null;
         $campaignId = isset($matchCampaign[1]) ? trim($matchCampaign[1]) : null;
         $zoneName = isset($matchTimezone[1]) ? trim($matchTimezone[1]) : "Asia/Kolkata";
         $scheduleAt = isset($matchSchedule[1]) ? trim($matchSchedule[1]) : null;
+        $createdBy = isset($matchcreatedBy[1]) ? trim($matchcreatedBy[1]) : null;
         $status = isset($matchStatus[1]) ? trim($matchStatus[1]) : null;
-
+// print_r($createdBy);exit;
         if (!$campaignId || !$zoneName || !$scheduleAt) {
             echo "❌ Invalid data format in file.txt\n";
             return;
@@ -213,8 +240,8 @@ class CampaignScheduler
                 ];
 
                 // ✅ Send the message
-                $sendStatus = $this->sendMessage($dataToSend, $campaignId, $templateId, "campaign");
-
+                $sendStatus = $this->sendMessage($dataToSend, $vid,$campaignId, $templateId, "campaign",$createdBy);
+// print_r($sendStatus);exit;
                 if ($sendStatus['apiStatus']['code'] === '200') {
                     // ✅ Update send_status to 'sent' in cmp_campaign
                     $updateStatusSql = "UPDATE cmp_campaign SET send_status = 'Executed' WHERE id = '$campaignId'";
@@ -223,7 +250,7 @@ class CampaignScheduler
                     } else {
                         echo "📌 send_status updated to 'sent' for campaign ID $campaignId\n";
                     }
-
+// print_r($updateStatusSql);exit;
                     // Remove current block from file.txt
                     $data = file_get_contents($this->filePath);
                     $pattern = "/CampaignID:\s*{$campaignId}\s*\|.*?Status:\s*\w+\s*/s";
@@ -238,7 +265,7 @@ class CampaignScheduler
                 echo "❌ No campaign/template data found for ID $campaignId.\n";
             }
             // } elseif ($diff < -240) {
-            // } elseif ($diff < 0) {
+            // // } elseif ($diff < 0) {
             //     // ⌛ Schedule expired
             //     echo "⚠️ Scheduled time passed for CampaignID $campaignId. Removing from file.\n";
             //     $data = file_get_contents($this->filePath);
@@ -251,10 +278,10 @@ class CampaignScheduler
     }
 
 
-    private function getUsingCampCredentials($data, $loginData)
+    private function getUsingCampCredentials($data, $vid)
     {
         try {
-
+// print_r($data);exit;
             $groupID = $data['group']['groupId'];
             $db = $this->dbConnect();
             // Fetch group details with user-provided group name
@@ -289,7 +316,7 @@ class CampaignScheduler
 
                 // Fetch the template dynamically
                 $template_id = $data['templateId'];
-                $templateResponse = $this->templateByID(["", "", $template_id], $loginData);
+                $templateResponse = $this->templateByID(["", "", $template_id], $vid);
                 $templateData = $templateResponse['result'];
                 // print_r(($templateResponse));exit;
                 // Return contacts along with template
@@ -315,8 +342,9 @@ class CampaignScheduler
             ];
         }
     }
-    public function templateByID($data, $loginData)
+    public function templateByID($data, $vid)
     {
+        // print_r($data);exit;
         try {
             // print_r($data);exit;
             $template_id = $data[2];
@@ -324,7 +352,7 @@ class CampaignScheduler
                 throw new Exception("Give template id");
             }
 
-            $this->fbCredentials($loginData);
+            $this->fbCredentials($vid);
 
             $url =  $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $template_id . '?' . "access_token=$this->fb_auth_token";
             $curl = curl_init();
@@ -415,30 +443,158 @@ class CampaignScheduler
     //     }
     // }
 
-    public function sendMessage($data, $loginData, $campaign_id, $iscampaign)
+    //new fast executequeue
+    private function executeQueue()
     {
-        try {
-// print_r($loginData);exit;
+        $lock_file = 'whatsapp_cron.lock';
 
-            $this->fbCredentials($loginData);
-            if (isset($data['scheduleStatus']) && $data['scheduleStatus'] === true) {
-                // It's a scheduled message, don't send immediately
-                return [
-                    "apiStatus" => [
-                        "code" => "200",
-                        "message" => "Message has been scheduled to be sent at " . $data['scheduledAt'],
-                    ],
-                    "result" => [
-                        "scheduled" => true,
-                        "scheduledAt" => $data['scheduledAt'],
-                        "timezone" => $data['timezone']['zoneName'] ?? 'Not Provided',
-                    ],
-                ];
+        // Step 1: Check if lock file exists and is recent (last 5 minutes)
+        if (file_exists($lock_file) && (time() - filemtime($lock_file)) < 300) {
+            echo "Another execution is already running. Exiting...\n";
+            return;
+        }
+
+        // Step 2: Create/refresh the lock file
+        touch($lock_file);
+
+        try {
+            $db = $this->dbConnect();
+
+            // ⚡ 1. Directly get top 80 queued messages PER vendor
+            $messagesQuery = "SELECT * FROM (
+                                SELECT *,
+                                    ROW_NUMBER() OVER (PARTITION BY vendor_id ORDER BY created_date ASC) as row_num
+                                FROM cmp_whatsapp_message_queue
+                                WHERE (message_status = 'queued' OR (message_status = 'failed' AND try_count < 3))
+                            ) AS subquery
+                            WHERE row_num <= 80 AND campaign_schedule = 0
+                            ORDER BY vendor_id, created_date ASC
+                        ";
+// print_r($messagesQuery);
+            $resultMessages = $db->query($messagesQuery);
+
+            $messagesGroupedByVendor = [];
+
+            while ($row = mysqli_fetch_assoc($resultMessages)) {
+                $messagesGroupedByVendor[$row['vendor_id']][] = $row;
             }
 
-            // Proceed to send immediately
-            $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
+            // 🔥 2. Now process messages group by vendor
+            foreach ($messagesGroupedByVendor as $vendorId => $allMessages) {
 
+                echo "Processing Vendor: " . $vendorId . " at " . date("Y-m-d H:i:s") . "\n";
+
+                // Set Facebook credentials
+                $this->fbCredentialsUsingVendorId($vendorId);
+
+                foreach ($allMessages as $message) {
+
+                    $contactMobile = $message['phone_number'];
+                    $templateName = $message['template_name'];
+                    $campaignId = $message['campaign_id'];
+                    $payload = json_decode($message['payload'], true);
+                    $messageId = $message['id'];
+
+                    $curl = curl_init();
+                    $url = $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->phone_no_id . '/messages';
+
+                    curl_setopt_array($curl, [
+                        CURLOPT_URL => $url,
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_ENCODING => '',
+                        CURLOPT_MAXREDIRS => 10,
+                        CURLOPT_TIMEOUT => 30,
+                        CURLOPT_FOLLOWLOCATION => true,
+                        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                        CURLOPT_CUSTOMREQUEST => 'POST',
+                        CURLOPT_POSTFIELDS => json_encode($payload),
+                        CURLOPT_HTTPHEADER => [
+                            'Content-Type: application/json',
+                            'Authorization: Bearer ' . $this->fb_auth_token,
+                        ],
+                    ]);
+
+                    $response = curl_exec($curl);
+                    $responseData = json_decode($response, true);
+                    $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+                    $curlError = curl_error($curl);
+                    curl_close($curl);
+
+                    if ($httpCode == 200) {
+                        $wamId = $responseData['messages'][0]['id'];
+                        $messageStatus = 'sent';
+
+                        $update = "UPDATE cmp_whatsapp_message_queue
+                        SET message_status = '$messageStatus',
+                            wam_id = '$wamId',
+                            sent_at = NOW(),
+                            updated_date = NOW()
+                        WHERE id = '$messageId'
+                    ";
+
+                        //     $update = "INSERT INTO cmp_whatsapp_messages 
+                        //     (vendor_id, campaign_id, agent, agent_contact, wam_id, message_type, message_body, message_status)
+                        //     VALUES ('$vendorId', '$campaignId', 'bot', '$contactMobile', '$wamId', 'template', '" . json_encode($payload) . "', '$messageStatus')
+                        // ";
+                    } else {
+                        $errorMessage = mysqli_real_escape_string($db, $curlError ?: ($responseData ? $responseData['error']['error_data']['details'] : 'Unknown error'));
+                        $update = "UPDATE cmp_whatsapp_message_queue
+                        SET message_status = 'failed',
+                            try_count = try_count + 1,
+                            last_try_at = NOW(),
+                            error_message = '$errorMessage',
+                            updated_date = NOW()
+                        WHERE id = '$messageId'
+                    ";
+                    }
+
+                    $db->query($update);
+                }
+            }
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "401",
+                    "message" => $e->getMessage(),
+                ],
+            ];
+        } finally {
+            if (file_exists($lock_file)) {
+                unlink($lock_file);
+                echo "file deleted\n";
+            }
+        }
+    }
+
+
+    public function sendMessage($data, $vid, $campaign_id,$templateId, $iscampaign, $createdBy)
+    {
+        // print_r($data);exit;
+        // print_r($vid);exit;
+        // print_r($campaign_id);exit; 
+        // print_r($templateId);exit;
+        try {
+
+            $this->fbCredentials($vid);
+            // if (isset($data['scheduleStatus']) && $data['scheduleStatus'] === true) {
+            //     // It's a scheduled message, don't send immediately
+            //     return [
+            //         "apiStatus" => [
+            //             "code" => "200",
+            //             "message" => "Message has been scheduled to be sent at " . $data['scheduledAt'],
+            //         ],
+            //         "result" => [
+            //             "scheduled" => true,
+            //             "scheduledAt" => $data['scheduledAt'],
+            //             "timezone" => $data['timezone']['zoneName'] ?? 'Not Provided',
+            //         ],
+            //     ];
+            // }
+
+            // Proceed to send immediately
+            $fetchResponse = $this->getUsingCampCredentials($data, $vid);
+//             echo"12";
+// print_r($fetchResponse);exit;
             if ($fetchResponse['apiStatus']['code'] != "200") {
                 return $fetchResponse;
             }
@@ -466,8 +622,9 @@ class CampaignScheduler
                         'components' => $dynamicComponents,
                     ],
                 ];
-
-                $insertcampaign = "INSERT INTO cmp_campaign_contact(campaign_id, contact_id, created_by, created_date) VALUES('" . $campaign_id . "','" . $contact['contactId'] . "','" . $loginData['user_id'] . "', NOW())";
+// print_r(    json_encode($body));exit;
+                $insertcampaign = "INSERT INTO cmp_campaign_contact(campaign_id, contact_id,created_by, created_date) VALUES('" . $campaign_id . "','" . $contact['contactId'] . "',$createdBy, NOW())";
+                // print_r(    $insertcampaign);exit;
                 $db = $this->dbConnect();
                 $db->query($insertcampaign);
 
@@ -498,6 +655,11 @@ class CampaignScheduler
 
                 if ($httpCode == 200) {
                     $successRecipient[] = $contact['mobile'];
+
+
+
+
+
                 } else {
                     $failureRecipient[] = $contact['mobile'];
                 }

@@ -38,8 +38,18 @@ class CAMPAIGNMODEL extends APIRESPONSE
                     return $result;
                 } elseif ($urlParam[1] === 'list') {
                     if ($urlParam[2] === 'dashboard') {
-                        $result = $this->getDashboardDetails($data, $loginData);
-                        return $result;
+                        if ($urlParam[3] === 'queue') {
+                            $result = $this->getCampaignQueueDetails($data, $loginData, $urlParam);
+                            return $result;
+                        } else if ($urlParam[3] === 'executed') {
+                            $result = $this->getCampaignQueueDetails($data, $loginData, $urlParam);
+                            return $result;
+                        } else {
+                            $result = $this->getDashboardDetails($data, $loginData);
+                            return $result;
+                        }
+                    } else {
+                        throw new Exception("Unable to proceed your request!");
                     }
                     $result = $this->getCampaignDetails($data, $loginData);
                     return $result;
@@ -296,7 +306,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
                 "campaignTitle" => $data['title'],
             );
             $this->validateInputDetails($validationData);
-
+            $vendor_id = $this->getVendorIdByUserId($loginData);
             // Fetch Template ID
             $templateId = mysqli_real_escape_string($db, $data['templateId']);
             $sql = "SELECT id FROM cmp_whatsapp_templates WHERE template_id = '$templateId' AND status = 1";
@@ -394,19 +404,19 @@ class CAMPAIGNMODEL extends APIRESPONSE
 
             // Write to file.txt after successful insert
             if ($data['scheduleStatus'] === true) {
-                $fileData = "CampaignID: $campaign_id | Timezone: $timezone_zoneName | ScheduleAt: $scheduleAt | Status: Scheduled" . PHP_EOL;
+                $fileData = "CampaignID: $campaign_id | vendorId: $vendor_id | Timezone: $timezone_zoneName | ScheduleAt: $scheduleAt |createdBy: {$loginData['user_id']}| Status: Scheduled" . PHP_EOL;
                 file_put_contents("file.txt", $fileData, FILE_APPEND); // Appends to the file
             }
 
 
             // Send WhatsApp Message
             $call = new WHATSAPPTEMPLATEMODEL();
-            $resulthhtp= $call->processQueue($data, $loginData, $campaign_id,"campaign");
+            $resulthhtp = $call->processQueue($data, $loginData, $campaign_id, "campaign");
             // print_r($resulthhtp['apiStatus']['code']);exit;
 
-            if ($resulthhtp['apiStatus']['code'] !== "200") {
-                throw new Exception("Message sending failed: " . $resulthhtp['apiStatus']['message']);
-            }
+            // if ($resulthhtp['apiStatus']['code'] !== "200") {
+            //     throw new Exception("Message sending failed: " . $resulthhtp['apiStatus']['message']);
+            // }
 
             // If not scheduled, update the send_status to 'sent'
             if (empty($data['scheduleStatus']) || $data['scheduleStatus'] === false) {
@@ -514,7 +524,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
                     "campaignName" => $row['title'],
                     "tempalte_language" => $row['language'],
                     "scheduleAt" => $row['schedule_at'],
-                     "sendStatus" => $row['send_status'],
+                    "sendStatus" => $row['send_status'],
                     "status" => $row['campaignStatus']
                 ];
 
@@ -531,7 +541,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
                 $responseArray = [
                     "totalContactCount" => $contactCount,
                     "campaignDetails" => $campaignDetails,
-                    "campaignContactList" => $campaignContactList
+                    // "campaignContactList" => $campaignContactList
                 ];
 
                 $resultArray = [
@@ -628,6 +638,90 @@ class CAMPAIGNMODEL extends APIRESPONSE
             return $resultArray;
         } catch (Exception $e) {
             throw new Exception($e->getMessage());
+        }
+    }
+
+    public function getCampaignQueueDetails($data, $loginData, $urlParam)
+    {
+        try {
+            $db = $this->dbConnect();
+            // Validate pageIndex and dataLength
+            if (isset($data['pageIndex']) && isset($data['pageIndex'])) {
+                $start_index = $data['pageIndex'] * $data['dataLength'];
+                $end_index = $data['dataLength'];
+            }
+
+            $campaign_id = mysqli_real_escape_string($db, $data['campaignId']);
+            // Fetch queue data for the given campaign
+            $query = "SELECT wmq.id, c.first_name, c.last_name, wmq.phone_number, wmq.template_name, wmq.message_status, wmq.updated_date, wmq.error_message
+                        FROM cmp_whatsapp_message_queue AS wmq
+                        LEFT JOIN cmp_contact AS c ON c.mobile = wmq.phone_number AND c.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
+                        WHERE wmq.campaign_id = '$campaign_id' AND wmq.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
+                        ";
+            if ($urlParam[3] === 'queue') {
+                $query .= " AND wmq.message_status = 'queued'";
+                $message = "queue";
+            } else if ($urlParam[3] === 'executed') {
+                $query .= " AND wmq.message_status != 'queued'";
+                $message = "executed";
+            }
+            if ($data['fiterBy']) {
+                $query .= " AND wmq.phone_number LIKE '%" . mysqli_real_escape_string($db, $data['fiterBy']) . "%' or wmq.template_name LIKE '%" . mysqli_real_escape_string($db, $data['fiterBy']) . "%' 
+                            or wmq.message_status LIKE '%" . mysqli_real_escape_string($db, $data['fiterBy']) . "%' ";
+            }
+            $query .= " ORDER BY wmq.created_date DESC";
+
+            if (isset($data['pageIndex']) && isset($data['dataLength'])) {
+                $query .= " LIMIT $start_index, $end_index";
+            }
+
+            $result = mysqli_query($db, $query);
+            $rowCnt = mysqli_num_rows($result);
+            if ($rowCnt > 0) {
+                $totalCount = $this->getQueueTotalCount($campaign_id);
+                $queueData = [];
+                while ($row = mysqli_fetch_assoc($result)) {
+                    $queueData[] = $row;
+                }
+                return array(
+                    "apiStatus" => array(
+                        "code" => "200",
+                        "message" => "Campaign $message data listed successfully"
+                    ),
+                    "totalRecordCount" => $totalCount,
+                    "responseCount" => $rowCnt,
+                    $message . 'Data' => $queueData
+                );
+            } else {
+                throw new Exception("No data found");
+            }
+        } catch (Exception $e) {
+            return array(
+                "apiStatus" => array(
+                    "code" => "401",
+                    "message" => $e->getMessage(),
+                ),
+            );
+        }
+    }
+
+    //Campaign add this new function
+    private function getQueueTotalCount($campaign_id)
+    {
+        try {
+            $db = $this->dbConnect();
+            $sql = "SELECT COUNT(*) as count
+            FROM cmp_whatsapp_message_queue
+            WHERE campaign_id = '$campaign_id'";
+            // print_r($sql);exit; 
+            $result = $db->query($sql);
+            $row = $result->fetch_assoc();
+            return $row['count'];
+        } catch (Exception $e) {
+            return array(
+                "result" => "401",
+                "message" => $e->getMessage(),
+            );
         }
     }
 
