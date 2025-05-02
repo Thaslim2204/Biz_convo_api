@@ -28,6 +28,9 @@ class COMMONMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] === 'getmyprofile') {
                     $result = $this->getmyprofile($data, $loginData);
                     return $result;
+                } elseif ($urlParam[1] === 'superAdmindashboardcount') {
+                    $result = $this->superAdminDashboardCount($data, $loginData);
+                    return $result;
                 } elseif ($urlParam[1] === 'vendordashboardcount') {
                     $result = $this->vendorDashboardCount($data, $loginData);
                     return $result;
@@ -45,13 +48,15 @@ class COMMONMODEL extends APIRESPONSE
                 if ($urlParam[1] === 'myprofile') {
                     $result = $this->myprofileupdate($data, $loginData);
                     return $result;
-                
                 } elseif ($urlParam[1] === "changepassword") {
                     $result = $this->changepassword($data, $loginData);
                     return $result;
                 } elseif ($urlParam[1] === 'groupbycontact') {
                     // $result = $this->getGroupByContactDetails($data, $loginData);
                     // return $result;
+                } elseif ($urlParam[1] === 'campaigndashboardcount') {
+                    $result = $this->campaignDashboardCount($data, $loginData);
+                    return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -183,49 +188,49 @@ class COMMONMODEL extends APIRESPONSE
             );
         }
     }
-    private function getmyprofile($data,$loginData)
-{
-    try {
-        $db = $this->dbConnect();
-// print_r($loginData);exit;
-        // Get the user ID from loginData
-        $userId = ($loginData['user_id']);
+    private function getmyprofile($data, $loginData)
+    {
+        try {
+            $db = $this->dbConnect();
+            // print_r($loginData);exit;
+            // Get the user ID from loginData
+            $userId = ($loginData['user_id']);
 
-        // Check if the User ID exists and is active
-        $checkIdQuery = "SELECT id,first_name,last_name,username,email,mobile,status FROM cmp_users WHERE id = '$userId' AND status = 1 AND active_status=1";
-        // print_r($checkIdQuery);exit;
-        $result = $db->query($checkIdQuery);
+            // Check if the User ID exists and is active
+            $checkIdQuery = "SELECT id,first_name,last_name,username,email,mobile,status FROM cmp_users WHERE id = '$userId' AND status = 1 AND active_status=1";
+            // print_r($checkIdQuery);exit;
+            $result = $db->query($checkIdQuery);
 
-        if ($result === false || $result->num_rows === 0) {
+            if ($result === false || $result->num_rows === 0) {
+                $db->close();
+                return [
+                    "apiStatus" => [
+                        "code" => "400",
+                        "message" => "User not found or inactive",
+                    ],
+                ];
+            }
+
+            // Fetch the user data
+            $userData = $result->fetch_assoc();
             $db->close();
+
             return [
                 "apiStatus" => [
-                    "code" => "400",
-                    "message" => "User not found or inactive",
+                    "code" => "200",
+                    "message" => "User profile retrieved successfully",
+                ],
+                "UserData" => $userData
+            ];
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "401",
+                    "message" => $e->getMessage(),
                 ],
             ];
         }
-
-        // Fetch the user data
-        $userData = $result->fetch_assoc();
-        $db->close();
-
-        return [
-            "apiStatus" => [
-                "code" => "200",
-                "message" => "User profile retrieved successfully",
-            ],
-            "UserData" => $userData
-        ];
-    } catch (Exception $e) {
-        return [
-            "apiStatus" => [
-                "code" => "401",
-                "message" => $e->getMessage(),
-            ],
-        ];
     }
-}
 
 
     private function myprofileupdate($data, $loginData)
@@ -306,9 +311,9 @@ class COMMONMODEL extends APIRESPONSE
             if (!empty($data['phone'])) {
                 $updateFields[] = "mobile = '{$db->real_escape_string($data['phone'])}'";
             }
-                // if (isset($data['activeStatus'])) {
-                //     $updateFields[] = "active_status = '{$db->real_escape_string($data['activeStatus'])}'";
-                // }
+            // if (isset($data['activeStatus'])) {
+            //     $updateFields[] = "active_status = '{$db->real_escape_string($data['activeStatus'])}'";
+            // }
 
             // Only execute update if there are fields to update
             if (!empty($updateFields)) {
@@ -348,6 +353,53 @@ class COMMONMODEL extends APIRESPONSE
             ];
         }
     }
+    public function superAdminDashboardCount($data, $loginData)
+    {
+        try {
+            $db = $this->dbConnect();
+
+            // Query to fetch super admin dashboard data from cmp_superadmin_dashboard_counts
+            $query = "SELECT 
+                        total_vendors, 
+                        total_active_vendors,
+                        whatsapp_queue AS messages_in_queue,
+                        overall_executed  
+                      FROM cmp_superadmin_dashboard_counts";
+
+            $result = $db->query($query);
+
+            if (!$result) {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+
+            if ($result->num_rows === 0) {
+                throw new Exception("No data found for the super admin dashboard.");
+            }
+
+            $row = $result->fetch_assoc();
+            $responseArray = array(
+                "TotalVendors" => $row['total_vendors'],
+                "TotalActiveVendors" => $row['total_active_vendors'],
+                "MessagesInQueue" => $row['messages_in_queue'],
+                "OverallExecuted" => $row['overall_executed'],
+            );
+
+            return array(
+                "apiStatus" => array(
+                    "code" => "200",
+                    "message" => "Super Admin dashboard count fetched successfully",
+                ),
+                "SuperAdminDashCountData" => $responseArray,
+            );
+        } catch (Exception $e) {
+            return array(
+                "apiStatus" => array(
+                    "code" => "404",
+                    "message" => "Error: " . $e->getMessage(),
+                ),
+            );
+        }
+    }
 
     public  function vendorDashboardCount($data, $loginData)
     {
@@ -366,11 +418,20 @@ class COMMONMODEL extends APIRESPONSE
 
             $row = $result->fetch_assoc();
             $responseArray = array(
+                "VendorId" => $vendorId,
                 "contactCount" => $row['contact_count'],
                 "CampaignCount" => $row['campaign_count'],
                 "WhatsappMessageCount" => $row['whatsapp_message_count'],
                 "whatsappTemplateCount" => $row['whatsapp_template_count'],
-              
+                "WhatsappQueueCount" => $row['queue_count'],
+                "whatsappSentCount" => $row['sent_count'],
+                "WhatsappDeliveredCount" => $row['delivery_count'],
+                "WhatsappReadCount" => $row['read_count'],
+                "WhatsappFailedCount" => $row['failed_count'],
+
+                "whatsappOverallQueueCount" => $row['overall_queue_count'],
+
+
             );
             return array(
                 "apiStatus" => array(
@@ -379,17 +440,80 @@ class COMMONMODEL extends APIRESPONSE
                 ),
                 "VendorDashCountData" => $responseArray,
             );
-
         } catch (Exception $e) {
             return array(
                 "apiStatus" => array(
-                    "code" => "500",
+                    "code" => "404",
                     "message" => "Error: " . $e->getMessage(),
                 ),
             );
         }
     }
-   
+
+    public function campaignDashboardCount($data, $loginData)
+    {
+        try {
+            $db = $this->dbConnect();
+
+            // Get input data
+
+            $campaignId = $data['campaignId'];
+            $vendorId = $this->getVendorIdByUserId($loginData);
+
+            // Validate required inputs
+            if (empty($campaignId)) {
+                throw new Exception("campaign Id are required.");
+            }
+
+            // Query to fetch data from cmp_campaign_dashboard_counts
+            $query = "SELECT 
+                        total_contacts, 
+                        total_queued,
+                        total_sent,
+                        total_delivered, 
+                        total_read, 
+                        total_failed 
+                      FROM cmp_campaign_dashboard_counts 
+                      WHERE vendor_id = '$vendorId' AND campaign_id = '$campaignId'";
+            // print_r($query);exit;
+            $result = $db->query($query);
+
+            if (!$result) {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+
+            if ($result->num_rows === 0) {
+                throw new Exception("No data found...");
+            }
+
+            $row = $result->fetch_assoc();
+            $responseArray = array(
+                "VendorId" => $vendorId,
+                "CampaignId" => $campaignId,
+                "TotalContacts" => $row['total_contacts'],
+                "TotalQueued" => $row['total_queued'],
+                "TotalSent" => $row['total_sent'],
+                "TotalDelivered" => $row['total_delivered'],
+                "TotalRead" => $row['total_read'],
+                "TotalFailed" => $row['total_failed'],
+            );
+
+            return array(
+                "apiStatus" => array(
+                    "code" => "200",
+                    "message" => "Campaign dashboard count fetched successfully",
+                ),
+                "CampaignDashCountData" => $responseArray,
+            );
+        } catch (Exception $e) {
+            return array(
+                "apiStatus" => array(
+                    "code" => "404",
+                    "message" => "Error: " . $e->getMessage(),
+                ),
+            );
+        }
+    }
 
 
     /**
@@ -491,47 +615,47 @@ class COMMONMODEL extends APIRESPONSE
                     throw new Exception("Please enter $field.");
                 }
             }
-    
+
             if ($data['newPassword'] !== $data['confirmPassword']) {
                 throw new Exception("New password and confirm password do not match");
             }
-    
+
             // Connect to the database
             $db = $this->dbConnect();
-    
+
             // Fetch user's current password
             $uid = $loginData['user_id'];
             $query = "SELECT password FROM cmp_users WHERE id = $uid";
             $result = $db->query($query);
-    
+
             if (!$result || $result->num_rows == 0) {
                 throw new Exception("User not found");
             }
-    
+
             $row = $result->fetch_assoc();
             $hashedOldPassword = $row['password'];
             $oldpassword = hash('sha256', hash('sha256', $data['oldPassword']));
-            
+
             // Verify old password
             if ($hashedOldPassword != $oldpassword) {
                 throw new Exception("Incorrect old password");
             }
-    
+
             // Hash new password
             $hashedNewPassword = hash('sha256', hash('sha256', $data['newPassword']));
             // print_r($hashedNewPassword);exit;
             // Update password
-            $updateQuery = "UPDATE cmp_users SET password = '$hashedNewPassword' , updated_by='".$loginData['user_id']."' WHERE id = $uid ";
+            $updateQuery = "UPDATE cmp_users SET password = '$hashedNewPassword' , updated_by='" . $loginData['user_id'] . "' WHERE id = $uid ";
             // print_r($updateQuery);exit;
             if (!$db->query($updateQuery)) {
                 throw new Exception("Failed to update password");
             }
-    
+
             // Close database connection
             $db->close();
             $statusCode = "200";
             $statusMessage = "Password changed successfully.";
-    
+
             // Success message
             return array(
                 "apiStatus" => array(
@@ -539,7 +663,6 @@ class COMMONMODEL extends APIRESPONSE
                     "message" => $statusMessage,
                 ),
             );
-    
         } catch (Exception $e) {
             // Error message
             return array(
@@ -550,7 +673,7 @@ class COMMONMODEL extends APIRESPONSE
             );
         }
     }
-    
+
     // Unautherized api request
     private function handle_error() {}
     /**

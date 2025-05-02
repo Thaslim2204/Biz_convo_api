@@ -11,23 +11,23 @@
                             "display_phone_number": "15551571932",
                             "phone_number_id": "637421792778479"
                         },
-                        "contacts": [
+                        "statuses": [
                             {
-                                "profile": {
-                                    "name": "Thas\u2728"
+                                "id": "wamid.HBgMOTE5MDI1NzE0NDQ1FQIAERgSREY1NjZEMzUxRjZFMjVGMDNGAA==",
+                                "status": "delivered",
+                                "timestamp": "1745993671",
+                                "recipient_id": "919025714445",
+                                "conversation": {
+                                    "id": "e6d0daf54dfc9d71c643903d84ccd210",
+                                    "origin": {
+                                        "type": "marketing"
+                                    }
                                 },
-                                "wa_id": "919025714445"
-                            }
-                        ],
-                        "messages": [
-                            {
-                                "from": "919025714445",
-                                "id": "wamid.HBgMOTE5MDI1NzE0NDQ1FQIAEhggMTk4ODZFMEE2OTYzODY4OTdCQ0ZDODZBNDI4MzRGQ0IA",
-                                "timestamp": "1745849486",
-                                "text": {
-                                    "body": "Mm"
-                                },
-                                "type": "text"
+                                "pricing": {
+                                    "billable": true,
+                                    "pricing_model": "CBP",
+                                    "category": "marketing"
+                                }
                             }
                         ]
                     },

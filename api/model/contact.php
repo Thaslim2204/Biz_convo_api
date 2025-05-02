@@ -1082,7 +1082,7 @@ class CONTACTMODEL extends APIRESPONSE
                     c.address,
                     c.loyality,
                     c.country,
-                    c.sale_amount,
+                    c.sales_amount,
 
                     s.store_name
 

@@ -37,7 +37,16 @@ class CAMPAIGNMODEL extends APIRESPONSE
                     $result = $this->createCampaign($data, $loginData);
                     return $result;
                 } elseif ($urlParam[1] === 'list') {
-                    if ($urlParam[2] === 'dashboard') {
+                    $paramLength = count($urlParam);
+                    if ($paramLength == 3) {
+                        if ($urlParam[2] === 'dashboard') {
+
+                            $result = $this->getDashboardDetails($data, $loginData);
+                            return $result;
+                        } else {
+                            throw new Exception("Unable to proceed your request!");
+                        }
+                    } elseif ($paramLength == 4) {
                         if ($urlParam[3] === 'queue') {
                             $result = $this->getCampaignQueueDetails($data, $loginData, $urlParam);
                             return $result;
@@ -45,12 +54,12 @@ class CAMPAIGNMODEL extends APIRESPONSE
                             $result = $this->getCampaignQueueDetails($data, $loginData, $urlParam);
                             return $result;
                         } else {
-                            $result = $this->getDashboardDetails($data, $loginData);
-                            return $result;
+                            throw new Exception("Unable to proceed your request!");
                         }
-                    } else {
-                        throw new Exception("Unable to proceed your request!");
                     }
+
+
+
                     $result = $this->getCampaignDetails($data, $loginData);
                     return $result;
                 } else if ($urlParam[1] === 'archive') {
@@ -64,13 +73,6 @@ class CAMPAIGNMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] == "deactiveachieve") {
                     $result = $this->campaigndeactiveachieve($data, $loginData);
                     return $result;
-                    // } elseif ($urlParam[1] === 'payloadStructure') {
-                    //     // print_r($data);exit;
-                    //     $result = $this->getpayloadstructure($data, $loginData);
-                    //     return $result;
-                    // } elseif ($urlParam[1] === 'groupbycontact') {
-                    //     $result = $this->getcampaignByContactDetails($data, $loginData);
-                    //     return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -78,12 +80,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
             case 'PUT':
                 $urlPath = $_GET['url'];
                 $urlParam = explode('/', $urlPath);
-                // if ($urlParam[1] == "update") {
-                //     $result = $this->updateGroup($data, $loginData);
-                // } else {
-                //     throw new Exception("Unable to proceed your request!");
-                // }
-                // return $result;
+
                 break;
             case 'DELETE':
                 $urlPath = $_GET['url'];
