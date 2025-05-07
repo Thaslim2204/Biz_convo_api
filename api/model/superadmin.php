@@ -44,6 +44,9 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
                 } elseif ($urlParam[2] === "userdeactive") {
                     $result = $this->userdeactive($loginData, $data);
                     return $result;
+                } elseif ($urlParam[2] === "generalvendor") {
+                    $result = $this->getgeneralvendorManage( $data,$loginData);
+                    return $result;
                 } else {
                     throw new Exception("Unable to proceed with your request!");
                 }
@@ -184,132 +187,133 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
     }
 
     private function vendorloginCheck($data, $loginData)
-{
-    try {
-        if (empty($data['vendorId'])) {
-            throw new Exception("Please provide the Vendor ID");
-        }
-
-        $db = $this->dbConnect();
-
-        // Fetch Vendor Details
-        $vendorQuery = "SELECT * FROM cmp_vendor WHERE id = '" . $data['vendorId'] . "' AND status = 1";
-        $vendorResult = $db->query($vendorQuery);
-
-        if ($vendorResult->num_rows == 0) {
-            throw new Exception("Vendor not found.");
-        }
-
-        $vendorDetails = $vendorResult->fetch_assoc();
-
-        // Fetch all user_ids mapped to the vendor
-        $vendorAdminQuery = "SELECT user_id FROM cmp_vendor_user_mapping WHERE vendor_id = '" . $data['vendorId'] . "' AND status = 1";
-        $vendorAdminResult = $db->query($vendorAdminQuery);
-
-        if ($vendorAdminResult->num_rows == 0) {
-            throw new Exception("No users mapped to this vendor.");
-        }
-
-        //Loop through and find user with 'Vendor Admin' role
-        $vendorAdminUserId = null;
-        while ($row = $vendorAdminResult->fetch_assoc()) {
-            $userId = $row['user_id'];
-
-            // Fetch role ids for user
-            $roleMapQuery = "SELECT role_id FROM cmp_user_role_mapping WHERE user_id = '$userId'";
-            $roleMapResult = $db->query($roleMapQuery);
-            if ($roleMapResult->num_rows == 0) {
-                continue; // no role assigned
+    {
+        try {
+            if (empty($data['vendorId'])) {
+                throw new Exception("Please provide the Vendor ID");
             }
 
-            while ($roleRow = $roleMapResult->fetch_assoc()) {
-                $roleId = $roleRow['role_id'];
+            $db = $this->dbConnect();
 
-                // Fetch role name from master table
-                $roleNameQuery = "SELECT role_name FROM cmp_mst_role WHERE role_id = '$roleId'";
-                $roleNameResult = $db->query($roleNameQuery);
-                if ($roleNameResult->num_rows > 0) {
-                    $role = $roleNameResult->fetch_assoc();
-                    if (strtolower($role['role_name']) === 'vendor_super_admin') {
-                        $vendorAdminUserId = $userId; // found vendor admin
-                        break 2; // break both loops
+            // Fetch Vendor Details
+            $vendorQuery = "SELECT * FROM cmp_vendor WHERE id = '" . $data['vendorId'] . "' AND status = 1";
+            $vendorResult = $db->query($vendorQuery);
+
+            if ($vendorResult->num_rows == 0) {
+                throw new Exception("Vendor not found.");
+            }
+
+            $vendorDetails = $vendorResult->fetch_assoc();
+
+            // Fetch all user_ids mapped to the vendor
+            $vendorAdminQuery = "SELECT user_id FROM cmp_vendor_user_mapping WHERE vendor_id = '" . $data['vendorId'] . "' AND status = 1";
+            $vendorAdminResult = $db->query($vendorAdminQuery);
+
+            if ($vendorAdminResult->num_rows == 0) {
+                throw new Exception("No users mapped to this vendor.");
+            }
+
+            //Loop through and find user with 'Vendor Admin' role
+            $vendorAdminUserId = null;
+            while ($row = $vendorAdminResult->fetch_assoc()) {
+                $userId = $row['user_id'];
+
+                // Fetch role ids for user
+                $roleMapQuery = "SELECT role_id FROM cmp_user_role_mapping WHERE user_id = '$userId'";
+                $roleMapResult = $db->query($roleMapQuery);
+                if ($roleMapResult->num_rows == 0) {
+                    continue; // no role assigned
+                }
+
+                while ($roleRow = $roleMapResult->fetch_assoc()) {
+                    $roleId = $roleRow['role_id'];
+
+                    // Fetch role name from master table
+                    $roleNameQuery = "SELECT role_name FROM cmp_mst_role WHERE role_id = '$roleId'";
+                    $roleNameResult = $db->query($roleNameQuery);
+                    if ($roleNameResult->num_rows > 0) {
+                        $role = $roleNameResult->fetch_assoc();
+                        if (strtolower($role['role_name']) === 'vendor_super_admin') {
+                            $vendorAdminUserId = $userId; // found vendor admin
+                            break 2; // break both loops
+                        }
                     }
                 }
             }
-        }
 
-        if (!$vendorAdminUserId) {
-            throw new Exception("Vendor Admin not found for this vendor.");
-        }
+            if (!$vendorAdminUserId) {
+                throw new Exception("Vendor Admin not found for this vendor.");
+            }
 
-        //Fetch vendor admin user details
-        $userQuery = "SELECT * FROM cmp_users WHERE id = '" . $vendorAdminUserId . "' AND status=1 AND active_status=1";
-        $userResult = $db->query($userQuery);
+            //Fetch vendor admin user details
+            $userQuery = "SELECT * FROM cmp_users WHERE id = '" . $vendorAdminUserId . "' AND status=1 AND active_status=1";
+            $userResult = $db->query($userQuery);
 
-        if ($userResult->num_rows == 0) {
-            throw new Exception("Vendor Admin user not found.");
-        }
+            if ($userResult->num_rows == 0) {
+                throw new Exception("Vendor Admin user not found.");
+            }
 
-        $userDetails = $userResult->fetch_assoc();
-        $userId = $userDetails['id'];
+            $userDetails = $userResult->fetch_assoc();
+            $userId = $userDetails['id'];
 
-        //Check for existing active token
-        $tokenCheckQuery = "SELECT token FROM cmp_user_login_log WHERE user_id = '$userId' AND login_status = 1 AND status = 1 ORDER BY login_time DESC LIMIT 1";
-        $tokenResult = $db->query($tokenCheckQuery);
+            //Check for existing active token
+            $tokenCheckQuery = "SELECT token FROM cmp_user_login_log WHERE user_id = '$userId' AND login_status = 1 AND status = 1 ORDER BY login_time DESC LIMIT 1";
+            $tokenResult = $db->query($tokenCheckQuery);
 
-        if ($tokenResult->num_rows > 0) {
-            $row   = $tokenResult->fetch_assoc();
-            $token = $row['token'];
-        } else {
-            // Generate a new token
-            $token = $this->generateJWTToken($userDetails['id'], $userDetails['username']);
-            $timeNow = date("Y-m-d H:i:s");
-            $sqlInsertUserLog = "INSERT INTO cmp_user_login_log (user_id, token, login_time, last_active_time) 
+            if ($tokenResult->num_rows > 0) {
+                $row   = $tokenResult->fetch_assoc();
+                $token = $row['token'];
+            } else {
+                // Generate a new token
+                $token = $this->generateJWTToken($userDetails['id'], $userDetails['username']);
+                $timeNow = date("Y-m-d H:i:s");
+                $sqlInsertUserLog = "INSERT INTO cmp_user_login_log (user_id, token, login_time, last_active_time) 
                                  VALUES ('$userId', '$token', '$timeNow', '$timeNow')";
-            $db->query($sqlInsertUserLog);
-        }
+                $db->query($sqlInsertUserLog);
+            }
 
-        //Log into superadmin-vendor login log
-        $vendorId = $data['vendorId'];
-        $timeNow  = date("Y-m-d H:i:s", strtotime("+4 hours 30 minutes"));
-        $sqlInsertSuperAdminLog = "INSERT INTO cmp_superadmin_vendor_login_log 
+            //Log into superadmin-vendor login log
+            $vendorId = $data['vendorId'];
+            $timeNow  = date("Y-m-d H:i:s", strtotime("+4 hours 30 minutes"));
+            $sqlInsertSuperAdminLog = "INSERT INTO cmp_superadmin_vendor_login_log 
                                    (user_id, vendor_id, token, login_time, last_active_time, created_date) 
                                    VALUES ('$userId', '$vendorId', '$token', '$timeNow', '$timeNow', NOW())";
-        $db->query($sqlInsertSuperAdminLog);
+            $db->query($sqlInsertSuperAdminLog);
 
-        //Prepare response
-        $userDetails = array(
-            "loginid" => $userDetails['id'],
-            "first_name" => $userDetails['first_name'],
-            "last_name" => $userDetails['last_name'],
-            "username" => $userDetails['username'],
-            "logInAs" => "super_admin",
-        );
+            //Prepare response
+            $userDetails = array(
+                "loginid" => $userDetails['id'],
+                "first_name" => $userDetails['first_name'],
+                "last_name" => $userDetails['last_name'],
+                "username" => $userDetails['username'],
+                "roleName" => $role['role_name'],
+                "logInAs" => "super_admin",
+            );
 
-        $result = array(
-            "token" => $token,
-            "userDetail" => $userDetails,
-        );
+            $result = array(
+                "token" => $token,
+                "userDetail" => $userDetails,
+            );
 
-        $resultArray = array(
-            "apiStatus" => array(
-                "code" => "200",
-                "message" => "Login Successfully",
-            ),
-            "result" => $result,
-        );
+            $resultArray = array(
+                "apiStatus" => array(
+                    "code" => "200",
+                    "message" => "Login Successfully",
+                ),
+                "result" => $result,
+            );
 
-        return $resultArray;
-    } catch (Exception $e) {
-        $this->loginLogCreate($e->getMessage(), "", getcwd());
-        return array(
-            "apiStatus" => array(
-                "code" => "401",
-                "message" => $e->getMessage(),
-            ),
-        );
+            return $resultArray;
+        } catch (Exception $e) {
+            $this->loginLogCreate($e->getMessage(), "", getcwd());
+            return array(
+                "apiStatus" => array(
+                    "code" => "401",
+                    "message" => $e->getMessage(),
+                ),
+            );
+        }
     }
-}
 
 
 
@@ -445,9 +449,9 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
 
     public function logout($data, $loginData)
     {
-       
+
         try {
-           
+
             $user_id = $loginData['user_id'];
             $db = $this->dbConnect();
             // Fetch token associated with the user_id
@@ -461,7 +465,7 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
             $userData = mysqli_fetch_assoc($result);
             $token = $userData['token'];
             $query = "SELECT id, user_id FROM cmp_user_login_log WHERE token = '$token' and Login_status='1'";
-            
+
             $result = $db->query($query);
             $row_cnt = mysqli_num_rows($result);
             $data = mysqli_fetch_array($result, MYSQLI_ASSOC);
@@ -759,6 +763,135 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
         }
     }
 
+    ///
+
+    public function getgeneralvendorManage($data, $loginData)
+    {
+        try {
+            // print_r($loginData);exit;
+            // echo"12321";exit;
+            $db = $this->dbConnect();
+            $userId = $loginData['user_id'];
+
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $userId";
+            // print_r($sql);exit;
+            $result = $db->query($sql);
+
+            if ($result) {
+                $row = $result->fetch_assoc();
+                if (!$row || !isset($row['vendor_id'])) {
+                    throw new Exception("Vendor ID not found for user ID: $userId");
+                }
+                $vendor_id = $row['vendor_id'];
+            } else {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+
+
+            $sql = "SELECT 
+                    v.id AS vendor_id, 
+                    v.name, 
+                    v.type, 
+                    v.email, 
+                    v.phone, 
+                    v.address, 
+                    v.active_status, 
+
+                    vsm.id AS vum_id, 
+                    vsm.user_id, 
+                    vsm.vendor_id, 
+                    vsm.mapping_status, 
+
+                    u.id AS user_id,
+                    u.first_name,
+                    u.last_name,
+                    u.username,
+                    u.email AS user_email,
+                    u.mobile AS user_phone,
+                    u.status AS user_status,
+                    u.created_by,
+
+                    r.role_id AS role_id,
+                    r.role_name AS role_name,
+
+                    urm.id AS rum_id, -- Fixed alias issue
+                    urm.user_id AS rum_user_id, 
+                                urm.role_id AS rum_role_id, 
+                    urm.status AS rum_status
+
+                FROM cmp_vendor AS v 
+                LEFT JOIN cmp_vendor_user_mapping AS vsm 
+                   ON v.id = vsm.vendor_id AND vsm.status = 1
+                LEFT JOIN cmp_users AS u 
+                    ON vsm.user_id = u.id
+                LEFT JOIN cmp_user_role_mapping AS urm  
+                    ON u.id = urm.user_id
+                LEFT JOIN cmp_mst_role AS r 
+                   ON urm.role_id = r.role_id
+                    WHERE  v.status = 1 
+                        AND r.role_name = 'vendor_super_admin'
+                       AND v.id = $vendor_id";
+// print_r($sql);exit;
+            $result = $db->query($sql);
+
+            // Check if vendor exists
+            if ($result->num_rows > 0) {
+                $vendor = array();
+                $contactPersons = array();
+
+                while ($row = $result->fetch_assoc()) {
+                    $vendor = array(
+                        "VendorId" => $row['vendor_id'],
+                        "VendorName" => $row['name'],
+                        "VendorType" => $row['type'],
+                        "VendorEmail" => $row['email'],
+                        "VendorPhone" => $row['phone'],
+                        "VendorAddress" => $row['address'],
+                        "VendorStatus" => $row['active_status'],
+                        "UserId" => $row['user_id'],
+                        "UserFirstName" => $row['first_name'],
+                        "UserLastName" => $row['last_name'],
+                        "UserUserName" => $row['username'],
+                        "UserEmail" => $row['user_email'],
+                        "UserPhone" => $row['user_phone'],
+                        "UserStatus" => $row['user_status'],
+                        "RoleId" => $row['role_id'],
+                        "RoleName" => $row['role_name'],
+                    );
+                }
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "200",
+                        "message" => "Vendor details with super admin persons fetched successfully",
+                    ),
+                    "result" => $vendor
+                );
+            } else {
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "404",
+                        "message" => "Vendor not found",
+                    )
+                );
+            }
+
+            // Close the database connection
+            $db->close();
+
+            // Return the result array
+            return $resultArray;
+        } catch (Exception $e) {
+            return array(
+                "apiStatus" => array(
+                    "code" => "500",
+                    "message" => $e->getMessage(),
+                )
+            );
+        }
+    }
+
+    ////
+
 
 
     /**
@@ -769,7 +902,7 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
      */
     public function createvendormanage($data, $loginData)
     {
-        // print_r($loginData);exit;
+        // print_r($data);exit;
         // Initialize result array
         $resultArray = array();
         try {
@@ -786,7 +919,7 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
                 "Address"      => $data['address'],
                 "Phone"        => $data['phone'],
                 "First Name"   => $data['userData']['first_name'],
-                "Last Name"    => $data['userData']['last_name'],
+                // "Last Name"    => $data['userData']['last_name'],
                 "User Name"    => $data['userData']['username'],
                 "Email ID"     => $data['userData']['email_id'],
                 "Password"     => $data['userData']['password']
@@ -901,7 +1034,7 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
             if (isset($data['company_name']) || isset($data['type']) || isset($data['address']) || isset($data['phone'])) {
                 $validationData = array(
                     "id" => $data['id'],
-                    "CompanyName" => $data['company_name'],
+                    // "CompanyName" => $data['company_name'],
                     "Type" => $data['type'],
                     "Address" => $data['address'],
                     "Phone" => $data['phone']
@@ -923,15 +1056,20 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
                 }
 
                 $updateVendorQuery = "UPDATE cmp_vendor SET 
-                                      name = '{$data['company_name']}',
+                                      
                                       type = '{$data['type']}',
                                       address = '{$data['address']}',
-                                      phone = '{$data['phone']}',
-                                      email = '{$data['email']}',
+                                        phone = '{$data['phone']}',
+                                        pincode = '{$data['pincode']}',
+                                        city = '{$data['city']}',
+                                        state = '{$data['state']}',
+                                        country = '{$data['country']}',
+                                        timezone = '{$data['timezone']}',
+                                        language = '{$data['language']}',
                                       updated_by = '{$loginData['user_id']}',
                                       updated_date = '{$dateNow}'
                                       WHERE id = '{$data['id']}' AND status = 1";
-
+// print_r($updateVendorQuery);exit;
                 if ($db->query($updateVendorQuery) === false) {
                     $db->close();
                     return [
@@ -952,7 +1090,7 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
                 $validationUserData = array(
                     "username" => $userData['username'],
                     "first_name" => $userData['first_name'],
-                    "last_name" => $userData['last_name'],
+                    // "last_name" => $userData['last_name'],
                     "email_id" => $userData['email_id']
                 );
                 $this->validateInputDetails($validationUserData);

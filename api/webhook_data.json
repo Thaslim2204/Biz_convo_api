@@ -13,21 +13,21 @@
                         },
                         "statuses": [
                             {
-                                "id": "wamid.HBgMOTE5MDI1NzE0NDQ1FQIAERgSREY1NjZEMzUxRjZFMjVGMDNGAA==",
-                                "status": "delivered",
-                                "timestamp": "1745993671",
+                                "id": "wamid.HBgMOTE5MDI1NzE0NDQ1FQIAERgSM0JBODQzOUQ3MzNENEE1NkZFAA==",
+                                "status": "failed",
+                                "timestamp": "1746179346",
                                 "recipient_id": "919025714445",
-                                "conversation": {
-                                    "id": "e6d0daf54dfc9d71c643903d84ccd210",
-                                    "origin": {
-                                        "type": "marketing"
+                                "errors": [
+                                    {
+                                        "code": 131047,
+                                        "title": "Re-engagement message",
+                                        "message": "Re-engagement message",
+                                        "error_data": {
+                                            "details": "Message failed to send because more than 24 hours have passed since the customer last replied to this number."
+                                        },
+                                        "href": "https:\/\/developers.facebook.com\/docs\/whatsapp\/cloud-api\/support\/error-codes\/"
                                     }
-                                },
-                                "pricing": {
-                                    "billable": true,
-                                    "pricing_model": "CBP",
-                                    "category": "marketing"
-                                }
+                                ]
                             }
                         ]
                     },

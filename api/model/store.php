@@ -687,7 +687,7 @@ class STOREMODEL extends APIRESPONSE
 
             $vendorRow = $result->fetch_assoc();
             $vendor_id = $vendorRow['vendor_id'];
-            $uid = bin2hex(random_bytes(8));
+            
             // Process Excel Rows
             foreach ($rows as $row) {
                 $storeName = trim($row['B']);
@@ -698,14 +698,29 @@ class STOREMODEL extends APIRESPONSE
                 $pincode   = trim($row['G']);
                 $phone     = trim($row['H']);
                 $email     = trim($row['I']);
+                $uid = bin2hex(random_bytes(8));
 
-                if (empty($storeName) || empty($address1) || empty($phone) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    throw new Exception("Invalid data found in row: " . json_encode($row));
+                if (empty($storeName)) {
+                    throw new Exception("Invalid data found in row: Store Name is missing.");
                 }
+                
+                if (empty($address1)) {
+                    throw new Exception("Invalid data found in row: Address is missing.");
+                }
+                
+                if (empty($phone)) {
+                    throw new Exception("Invalid data found in row: Phone number is missing.");
+                }
+                
+                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    throw new Exception("Invalid data found in row: Email address is invalid.");
+                }
+                
 
                 // Check if Store Exists
                 $storeQuery = "SELECT id FROM cmp_store WHERE store_name = '$storeName' LIMIT 1";
                 $storeResult = $db->query($storeQuery);
+                // print_r($storeQuery);exit;
 
                 if ($storeResult->num_rows > 0) {
                     $storeRow = $storeResult->fetch_assoc();
@@ -736,7 +751,7 @@ class STOREMODEL extends APIRESPONSE
 
             return ["apiStatus" => ["code" => "200", "message" => "Excel file uploaded and processed successfully."]];
         } catch (Exception $e) {
-            return ["apiStatus" => ["code" => "401", "message" => $e->getMessage()]];
+            return ["apiStatus" => ["code" => "401", "message" =>$e->getMessage()]];
         }
     }
 

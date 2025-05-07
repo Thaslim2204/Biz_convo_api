@@ -25,6 +25,9 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] == "sidelist") {
                     $result = $this->sidecontactlist($data, $loginData);
                     return $result;
+                } elseif ($urlParam[1] == "clearchathistory") {
+                    $result = $this->clearChatHistory($data, $loginData);
+                    return $result;
                 } elseif ($urlParam[1] == "contactinfo") {
                     $result = $this->contactinfo($data, $loginData);
                     return $result;
@@ -380,7 +383,7 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
             // Get paginated messages
             $query = "SELECT agent, message_type, wam_id, agent_contact, message_body, media_link, message_status, created_date, updated_date
                   FROM cmp_whatsapp_messages  
-                  WHERE status=1 AND vendor_id = '$vendor_id'";
+                  WHERE status = 1 AND vendor_id = '$vendor_id'";
             if ($recipient) {
                 $query .= " AND agent_contact = '$recipient'";
             }
@@ -394,8 +397,8 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
                 $media_url = "";
                 if (!empty($row['media_link'])) {
                     // get the access token from the database or set it here
-                  
-                    $media_url = $this->getMetaMediaUrl($row['media_link'], $access_token,$facebook_base_version);
+
+                    $media_url = $this->getMetaMediaUrl($row['media_link'], $access_token, $facebook_base_version);
 
                     // if (!empty($media_url)) {
                     //     $saved_file = $this->downloadAndSaveMedia($media_url);
@@ -450,7 +453,7 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
     private function getMetaMediaUrl($media_id, $access_token, $facebook_base_version)
     {
         $url = "https://graph.facebook.com/{$facebook_base_version}/{$media_id}";
-// print_r($url);exit;
+        // print_r($url);exit;
         $headers = [
             "Authorization: Bearer {$access_token}"
         ];
@@ -499,6 +502,7 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
     public function sidecontactlist($data, $loginData)
     {
         try {
+            // print_r();exit;
             $db = $this->dbConnect();
 
             $userId = $loginData['user_id'];
@@ -522,13 +526,25 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
             $countRow = $countResult->fetch_assoc();
             $recordCount = $countRow['totalCount'];
 
-            // Get paginated messages
+            // Prepare the base query
             $query = "SELECT c.id, wm.agent_contact, c.first_name, c.last_name, wm.created_date
-                  FROM cmp_whatsapp_messages AS wm
-                 LEFT JOIN cmp_contact AS c ON wm.agent_contact = c.mobile
-                  WHERE wm.status=1 AND wm.vendor_id = '$vendor_id'  AND c.vendor_id = '$vendor_id'
-                  GROUP BY wm.agent_contact
-                  ORDER BY wm.created_by ASC";
+                    FROM cmp_whatsapp_messages AS wm
+                    LEFT JOIN cmp_contact AS c ON wm.agent_contact = c.mobile
+                    WHERE wm.vendor_id = '$vendor_id'  
+                      AND c.vendor_id = '$vendor_id'";
+
+            // Add the filtering condition dynamically if `$data['fiterBy']` is set
+            if (!empty($data['filter']['search'])) {
+                $filter = mysqli_real_escape_string($db, $data['filter']['search']);
+                $query .= " AND (wm.agent_contact LIKE '%$filter%' 
+           OR c.first_name LIKE '%$filter%' 
+           OR c.last_name LIKE '%$filter%')";
+            }
+
+            // Add GROUP BY and ORDER BY clauses
+            $query .= " GROUP BY wm.agent_contact
+  ORDER BY wm.created_date ASC";  // Assuming you want to order by 'created_date', not 'created_by'
+
 
             $result = $db->query($query);
             // print_r($query);exit;
@@ -588,6 +604,7 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
             ];
         }
     }
+
 
     public function contactinfo($data, $loginData)
     {
@@ -667,6 +684,80 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
             ];
         }
     }
+    public function clearChatHistory($data, $loginData)
+    {
+        try {
+            $db = $this->dbConnect();
+            $userId = (int)$loginData['user_id'];
+
+            if (empty($data['contactNumber'])) {
+                throw new Exception("Contact number is required.");
+            }
+
+            $contactNumber = $db->real_escape_string($data['contactNumber']);
+
+            // Get vendor_id for the user
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $userId";
+            $result = $db->query($sql);
+
+            if (!$result) {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+
+            $row = $result->fetch_assoc();
+            if (!$row || !isset($row['vendor_id'])) {
+                throw new Exception("Vendor ID not found for user ID: $userId");
+            }
+
+            $vendor_id = $db->real_escape_string($row['vendor_id']);
+
+            // Check if contact exists
+            $query = "SELECT * FROM cmp_whatsapp_messages 
+                  WHERE status = 1 
+                  AND vendor_id = '$vendor_id' 
+                  AND agent_contact = '$contactNumber'";
+                //   print_r($query);exit;
+            $result = $db->query($query);
+
+            if (!$result) {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+
+            if ($result->num_rows == 0) {
+                throw new Exception("No contact found with the given number.");
+            }
+
+            // Soft delete: update status = 0
+            $updateQuery = "UPDATE cmp_whatsapp_messages 
+                        SET status = 0 
+                        WHERE agent_contact = '$contactNumber' 
+                        AND vendor_id = '$vendor_id'";
+                        // print_r($updateQuery);exit;
+            $updateResult = $db->query($updateQuery);
+
+            if (!$updateResult) {
+                throw new Exception("Failed to update chat history status: " . $db->error);
+            }
+
+            return [
+                "apiStatus" => [
+                    "code" => "200",
+                    "message" => "Chat history deleted successfully"
+                ],
+                "result" => [
+                    "deletedContact" => $contactNumber
+                ]
+            ];
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "500",
+                    "message" => $e->getMessage()
+                ]
+            ];
+        }
+    }
+
 
 
     private function handle_error() {}

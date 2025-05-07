@@ -40,7 +40,6 @@ class CAMPAIGNMODEL extends APIRESPONSE
                     $paramLength = count($urlParam);
                     if ($paramLength == 3) {
                         if ($urlParam[2] === 'dashboard') {
-
                             $result = $this->getDashboardDetails($data, $loginData);
                             return $result;
                         } else {
@@ -57,9 +56,6 @@ class CAMPAIGNMODEL extends APIRESPONSE
                             throw new Exception("Unable to proceed your request!");
                         }
                     }
-
-
-
                     $result = $this->getCampaignDetails($data, $loginData);
                     return $result;
                 } else if ($urlParam[1] === 'archive') {
@@ -483,8 +479,8 @@ class CAMPAIGNMODEL extends APIRESPONSE
             // Get the total record count
             // Get the total contact count
             $contactCountQuery = "SELECT COUNT(DISTINCT con.id) AS contactCount FROM cmp_campaign AS c 
-   JOIN cmp_group_contact_mapping AS gcm ON gcm.group_id = c.group_id
-   JOIN cmp_contact AS con ON con.id = gcm.contact_id
+   left JOIN cmp_group_contact_mapping AS gcm ON gcm.group_id = c.group_id
+    left JOIN cmp_contact AS con ON con.id = gcm.contact_id
    WHERE c.id='" . $data['templateId'] . "'";
 
             $contactCountResult = $db->query($contactCountQuery);
@@ -499,9 +495,9 @@ class CAMPAIGNMODEL extends APIRESPONSE
             con.first_name, con.last_name, con.mobile, con.email,
             con.status AS contactStatus, con.created_date AS contactCreatedDate 
             FROM cmp_campaign AS c 
-            JOIN cmp_whatsapp_templates AS wt ON wt.id = c.template_id
-            JOIN cmp_group_contact_mapping AS gcm ON gcm.group_id = c.group_id
-            JOIN cmp_contact AS con ON con.id = gcm.contact_id
+           LEFT JOIN cmp_whatsapp_templates AS wt ON wt.id = c.template_id
+            LEFT JOIN cmp_group_contact_mapping AS gcm ON gcm.group_id = c.group_id
+            LEFT JOIN cmp_contact AS con ON con.id = gcm.contact_id
             LEFT JOIN cmp_campaign_contact AS cc ON cc.contact_id = con.id AND cc.campaign_id = c.id
             WHERE c.id='" . $data['templateId'] . "' 
             AND c.status = 1 
@@ -1186,7 +1182,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
      JOIN cmp_whatsapp_templates AS wt ON wt.id = c.template_id
      WHERE c.status = 1  AND wt.status = 1 AND c.active_status=0
      AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData);
-
+// print_r($countQuery);exit;
             $countResult = $db->query($countQuery);
             $countRow = $countResult->fetch_assoc();
             $recordCount = $countRow['totalCount']; // Total record count

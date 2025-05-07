@@ -506,7 +506,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
         try {
             $this->fbCredentials($loginData);
             $url = $this->facebook_base_url . "/" . $this->facebook_base_version . "/" . $this->whatsapp_business_id . "/" . "message_templates?fields=name,status&status=APPROVED";
-            // echo $url;exit;
+            // print_r($url);exit;
             $queryParams = [];
             if (!empty($data['limit'])) {
                 $queryParams[] = "limit=" . $data['limit'];

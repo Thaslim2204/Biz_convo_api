@@ -788,34 +788,43 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
                 $privileges = trim($row['H']); // Privileges are comma-separated
 
                 // Validate required fields
-                if (empty($firstName) || empty($email) || empty($storeName)) {
-                    throw new Exception("Missing required fields in row: " . json_encode($row));
+                // if (empty($firstName) || empty($email) || empty($storeName)) {
+                //     throw new Exception("Missing required fields in row: " . json_encode($row));
+                // }
+                if (empty($firstName)) {
+                    throw new Exception("First name is required in row: " . "First Name is missing");
                 }
-                 // Check if store exists
-                 $storeQuery = "SELECT id FROM cmp_store WHERE store_name = '$storeName' AND status = 1 AND created_by ='" . $loginData['user_id'] . "'";
-                 $storeResult = $db->query($storeQuery);
-                 if ($storeResult->num_rows === 0) {
-                     throw new Exception("Store not found: " . $storeName);
-                 }
-                 $store_id = $storeResult->fetch_assoc()['id'];
- 
-                 // Fetch vendor_id using store_id
-                 $vendorQuery = "SELECT vendor_id FROM cmp_vendor_store_mapping WHERE store_id = '$store_id' LIMIT 1";
-                 $vendorResult = $db->query($vendorQuery);
-                 if ($vendorResult->num_rows > 0) {
-                     // $vendor_id = $vendorResult->fetch_assoc()['vendor_id'];
-                 } else {
-                     throw new Exception("Vendor ID not found for store ID: $store_id");
-                 }
- 
-                 // Get vendor_id from loginData
-                 $user_id = $loginData['user_id'];
-                 $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id AND status = 1";
-                 $result = $db->query($sql);
-                 if (!$result || $result->num_rows === 0) {
-                     throw new Exception("Vendor ID not found for user.");
-                 }
-                 $vendor_id = $result->fetch_assoc()['vendor_id'];
+                if (empty($email)) {
+                    throw new Exception("Email is required in row: " . "Email is missing");
+                }
+                if (empty($storeName)) {
+                    throw new Exception("Store name is required in row: " . "Store Name is missing");
+                }
+                // Check if store exists
+                $storeQuery = "SELECT id FROM cmp_store WHERE store_name = '$storeName' AND status = 1 AND created_by ='" . $loginData['user_id'] . "'";
+                $storeResult = $db->query($storeQuery);
+                if ($storeResult->num_rows === 0) {
+                    throw new Exception("Store not found: " . $storeName);
+                }
+                $store_id = $storeResult->fetch_assoc()['id'];
+
+                // Fetch vendor_id using store_id
+                $vendorQuery = "SELECT vendor_id FROM cmp_vendor_store_mapping WHERE store_id = '$store_id' LIMIT 1";
+                $vendorResult = $db->query($vendorQuery);
+                if ($vendorResult->num_rows > 0) {
+                    // $vendor_id = $vendorResult->fetch_assoc()['vendor_id'];
+                } else {
+                    throw new Exception("Vendor ID not found for store ID: $store_id");
+                }
+
+                // Get vendor_id from loginData
+                $user_id = $loginData['user_id'];
+                $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id AND status = 1";
+                $result = $db->query($sql);
+                if (!$result || $result->num_rows === 0) {
+                    throw new Exception("Vendor ID not found for user.");
+                }
+                $vendor_id = $result->fetch_assoc()['vendor_id'];
 
                 // Check if staff exists
                 $sql = "SELECT id FROM cmp_users WHERE email = '$email' AND status = 1 AND created_by ='" . $loginData['user_id'] . "'";
@@ -839,7 +848,7 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
                           ON DUPLICATE KEY UPDATE role_id = '4', status = '1'";
                 $db->query($roleQuery);
 
-               
+
 
                 // Insert into cmp_vendor_store_staff_mapping
                 $storeMappingQuery = "INSERT INTO cmp_vendor_store_staff_mapping (staff_id, store_id, vendor_id,created_by) 
@@ -985,7 +994,7 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
             $sheet = $spreadsheet->getActiveSheet();
 
             // Set column headers
-            $headers = ['S.No', 'First Name', 'Last Name', 'Username', 'Email', 'Mobile', 'Store Name','Privilege'];
+            $headers = ['S.No', 'First Name', 'Last Name', 'Username', 'Email', 'Mobile', 'Store Name', 'Privilege'];
             $column = 'A';
             foreach ($headers as $header) {
                 $sheet->setCellValue($column . '1', $header);

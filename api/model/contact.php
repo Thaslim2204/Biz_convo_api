@@ -419,12 +419,12 @@ class CONTACTMODEL extends APIRESPONSE
 
             // Validate input data
             $validationData = array(
-                "storeId" => $data['storeId'],
+                // "storeId" => $data['storeId'],
                 "FirstName" => $data['firstName'],
                 "Mobile"        => $data['mobile'],
-                "EmailID"     => $data['email'],
-                "Country"     => $data['country'],
-                "Language"       => $data['language'],
+                // "EmailID"     => $data['email'],
+                // "Country"     => $data['country'],
+                // "Language"       => $data['language'],
 
             );
 
@@ -455,12 +455,12 @@ class CONTACTMODEL extends APIRESPONSE
             }
 
             // Check if Contact ID exists
-            $sql = "SELECT id FROM cmp_store WHERE id = '" . $data['storeId'] . "' AND status = 1 AND active_status = 1 AND created_by = " . $loginData['user_id'];
-            $result = mysqli_query($db, $sql);
+            // $sql = "SELECT id FROM cmp_store WHERE id = '" . $data['storeId'] . "' AND status = 1 AND active_status = 1 AND created_by = " . $loginData['user_id'];
+            // $result = mysqli_query($db, $sql);
 
-            if (!$result || mysqli_num_rows($result) === 0) {
-                throw new Exception('Invalid Store ID');
-            }
+            // if (!$result || mysqli_num_rows($result) === 0) {
+            //     throw new Exception('Invalid Store ID');
+            // }
             // Validate group name and ID
             foreach ($data['groupdetails'] as $group) {
                 $groupId = $group['groupId'];
@@ -556,12 +556,12 @@ class CONTACTMODEL extends APIRESPONSE
             // Validate input data
             $validationData = array(
                 "ContactId" => $data['contactId'],
-                "storeId" => $data['storeId'],
+                // "storeId" => $data['storeId'],
                 "FirstName" => $data['firstName'],
                 "Mobile" => $data['mobile'],
-                "EmailID" => $data['email'],
-                "Country" => $data['country'],
-                "Language" => $data['language'],
+                // "EmailID" => $data['email'],
+                // "Country" => $data['country'],
+                // "Language" => $data['language'],
             );
 
             $this->validateInputDetails($validationData);
@@ -587,13 +587,13 @@ class CONTACTMODEL extends APIRESPONSE
                 throw new Exception("Contact not found");
             }
 
-            // Check if Contact ID exists
-            $sql = "SELECT id FROM cmp_store WHERE id = '" . $data['storeId'] . "' AND status = 1 AND active_status = 1 ";
-        //    print_r($sql);exit;
-            $result = mysqli_query($db, $sql);
-            if (!$result || mysqli_num_rows($result) === 0) {
-                throw new Exception('Invalid Store ID');
-            }
+        //     // Check if Contact ID exists
+        //     $sql = "SELECT id FROM cmp_store WHERE id = '" . $data['storeId'] . "' AND status = 1 AND active_status = 1 ";
+        // //    print_r($sql);exit;
+        //     $result = mysqli_query($db, $sql);
+        //     if (!$result || mysqli_num_rows($result) === 0) {
+        //         throw new Exception('Invalid Store ID');
+        //     }
 
             // Check if the mobile number already exists for another contact
             $sql = "SELECT id FROM cmp_contact WHERE mobile = '" . $data['mobile'] . "' AND id != '" . $data['contactId'] . "' AND status = 1 AND vendor_id = '" . $vendor_id . "'";
@@ -865,6 +865,7 @@ class CONTACTMODEL extends APIRESPONSE
             $fileType = $file['type'];
             $fileSize = $file['size'];
 
+
             // Allowed file types
             $allowedTypes = [
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -927,9 +928,19 @@ class CONTACTMODEL extends APIRESPONSE
                 $rawAnniversary = trim($row['K']);
 
                 error_log("Processing row: " . json_encode($row));
-
-                if (empty($firstName) || empty($storeName) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    throw new Exception("Invalid or missing required fields in row: " . json_encode($row));
+// print_r($rows);exit;
+                // Validate required fields
+                // if (empty($firstName) || empty($groupName) || empty($mobile)) {
+                //     throw new Exception("Invalid or missing required fields in row: " . json_encode($row));
+                // }
+                if (empty($firstName)) {
+                    throw new Exception("Invalid data found in row: Address is missing.");
+                }
+                if (empty($mobile)) {
+                    throw new Exception("Invalid data found in row: Mobile number is missing.");
+                }
+                if (empty($groupName)) {
+                    throw new Exception("Invalid data found in row: Group name is missing.");
                 }
 
                 // Store lookup
@@ -956,7 +967,7 @@ class CONTACTMODEL extends APIRESPONSE
                 }
 
                 // Check duplicate
-                $checkQuery = "SELECT id FROM cmp_contact WHERE mobile = '$mobile' AND created_by = '$user_id' LIMIT 1";
+                $checkQuery = "SELECT id FROM cmp_contact WHERE mobile = '$mobile' AND created_by = '$user_id' AND status = 1 LIMIT 1";
                 $checkResult = $db->query($checkQuery);
                 if ($checkResult->num_rows > 0) {
                     $existingRow = $checkResult->fetch_assoc();
@@ -987,6 +998,7 @@ class CONTACTMODEL extends APIRESPONSE
                                 (first_name, last_name, gender, email, mobile, language_code, date_of_birth, address, loyality, anniversary, country,sales_amount, store_id, vendor_id, created_by) 
                                 VALUES 
                                 ('$firstName', '$lastName', '$gender', '$email', '$mobile', '$language', '$dob', '$address', '$loyalty', '$anniversary', '$country','$saleAmount', '$store_id', '$vendor_id', '$user_id')";
+                // print_r($insertQuery);
                 if ($db->query($insertQuery) === true) {
                     $contactId = $db->insert_id;
 
@@ -994,7 +1006,8 @@ class CONTACTMODEL extends APIRESPONSE
                     foreach ($groupIds as $group_id) {
                         $insertGroupQuery = "INSERT INTO cmp_group_contact_mapping (group_id, contact_id, created_by, created_date) 
                                              VALUES ('$group_id', '$contactId', '$user_id', NOW())";
-                        if (!$db->query($insertGroupQuery)) {
+                    //    print_r($insertGroupQuery);
+                       if (!$db->query($insertGroupQuery)) {
                             throw new Exception("Error inserting into cmp_group_contact_mapping: " . $db->error);
                         }
                     }
@@ -1239,7 +1252,7 @@ class CONTACTMODEL extends APIRESPONSE
             return [
                 'apiStatus' => [
                     'code' => count($failed) > 0 ? "400" : "200",
-                    'message' => count($failed) > 0 ? 'Some deletions failed' : 'All deletions successful'
+                    'message' => count($failed) > 0 ? 'Some deletions failed' : 'Records deleted successfully'
                 ],
                 'deleted' => $deleted,
                 'failed' => $failed
