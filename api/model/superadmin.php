@@ -45,7 +45,7 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
                     $result = $this->userdeactive($loginData, $data);
                     return $result;
                 } elseif ($urlParam[2] === "generalvendor") {
-                    $result = $this->getgeneralvendorManage( $data,$loginData);
+                    $result = $this->getgeneralvendorManage($data, $loginData);
                     return $result;
                 } else {
                     throw new Exception("Unable to proceed with your request!");
@@ -538,6 +538,12 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
                     v.email, 
                     v.phone, 
                     v.address, 
+                    v.pincode,
+                    v.city,
+                    v.state,
+                    v.country,
+                    v.timezone,
+                    v.language, 
                     v.active_status, 
 
                     vsm.id AS vum_id, 
@@ -591,6 +597,12 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
                         "VendorEmail" => $row['email'],
                         "VendorPhone" => $row['phone'],
                         "VendorAddress" => $row['address'],
+                        "VendorPincode" => $row['pincode'],
+                        "VendorCity" => $row['city'],
+                        "VendorState" => $row['state'],
+                        "VendorCountry" => $row['country'],
+                        "VendorTimezone" => $row['timezone'],
+                        "VendorLanguage" => $row['language'],
                         "VendorStatus" => $row['active_status'],
                         "UserId" => $row['user_id'],
                         "UserFirstName" => $row['first_name'],
@@ -668,6 +680,12 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
                     v.email, 
                     v.phone, 
                     v.address, 
+                    v.pincode,
+                    v.city,
+                    v.state,
+                    v.country,
+                    v.timezone,
+                    v.language, 
                     v.active_status, 
 
                     vsm.id AS vum_id, 
@@ -720,6 +738,12 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
                         "VendorEmail" => $row['email'],
                         "VendorPhone" => $row['phone'],
                         "VendorAddress" => $row['address'],
+                        "VendorPincode" => $row['pincode'],
+                        "VendorCity" => $row['city'],
+                        "VendorState" => $row['state'],
+                        "VendorCountry" => $row['country'],
+                        "VendorTimezone" => $row['timezone'],
+                        "VendorLanguage" => $row['language'],
                         "VendorStatus" => $row['active_status'],
                         "UserId" => $row['user_id'],
                         "UserFirstName" => $row['first_name'],
@@ -794,7 +818,13 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
                     v.type, 
                     v.email, 
                     v.phone, 
-                    v.address, 
+                    v.address,
+                    v.pincode,
+                    v.city,
+                    v.state,
+                    v.country,
+                    v.timezone,
+                    v.language, 
                     v.active_status, 
 
                     vsm.id AS vum_id, 
@@ -831,7 +861,7 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
                     WHERE  v.status = 1 
                         AND r.role_name = 'vendor_super_admin'
                        AND v.id = $vendor_id";
-// print_r($sql);exit;
+            // print_r($sql);exit;
             $result = $db->query($sql);
 
             // Check if vendor exists
@@ -847,6 +877,12 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
                         "VendorEmail" => $row['email'],
                         "VendorPhone" => $row['phone'],
                         "VendorAddress" => $row['address'],
+                        "VendorPincode" => $row['pincode'],
+                        "VendorCity" => $row['city'],
+                        "VendorState" => $row['state'],
+                        "VendorCountry" => $row['country'],
+                        "VendorTimezone" => $row['timezone'],
+                        "VendorLanguage" => $row['language'],
                         "VendorStatus" => $row['active_status'],
                         "UserId" => $row['user_id'],
                         "UserFirstName" => $row['first_name'],
@@ -1035,7 +1071,7 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
                 $validationData = array(
                     "id" => $data['id'],
                     // "CompanyName" => $data['company_name'],
-                    "Type" => $data['type'],
+                    // "Type" => $data['type'],
                     "Address" => $data['address'],
                     "Phone" => $data['phone']
                 );
@@ -1069,7 +1105,7 @@ class SUPERADMINLOGINMODEL extends APIRESPONSE
                                       updated_by = '{$loginData['user_id']}',
                                       updated_date = '{$dateNow}'
                                       WHERE id = '{$data['id']}' AND status = 1";
-// print_r($updateVendorQuery);exit;
+                // print_r($updateVendorQuery);exit;
                 if ($db->query($updateVendorQuery) === false) {
                     $db->close();
                     return [
