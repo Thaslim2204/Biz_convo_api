@@ -3,8 +3,15 @@
 
 require_once "include/apiResponseGenerator.php";
 require_once "include/dbConnection.php";
-// require_once "model/whatsapp_template.php";
+require_once "model/sms.php";
 
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Font;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+
+require __DIR__ . '/../../vendor/autoload.php';
 class SMSCampaignMODEL extends APIRESPONSE
 {
     private function processMethod($data, $loginData)
@@ -34,6 +41,12 @@ class SMSCampaignMODEL extends APIRESPONSE
                 if ($urlParam[1] === 'create') {
                     $result = $this->createSmsCampaign($data, $loginData);
                     return $result;
+                } elseif ($urlParam[1] == "report") {
+                    $result = $this->reportSmscampaign($data, $loginData);
+                    return $result;
+                } elseif ($urlParam[1] == "exceldownload") {
+                    $result = $this->exportSmsCampaignToExcel($data, $loginData);
+                    return $result;
                 } elseif ($urlParam[1] === 'list') {
                     $paramLength = count($urlParam);
                     if ($paramLength == 3) {
@@ -56,17 +69,17 @@ class SMSCampaignMODEL extends APIRESPONSE
                     }
                     $result = $this->getSmsCampaignDetails($data, $loginData);
                     return $result;
-                // } else if ($urlParam[1] === 'archive') {
-                //     if ($urlParam[2] === 'list') {
-                //         $result = $this->getCampaignArchiveDetails($data, $loginData);
-                //         return $result;
-                //     }
-                // } elseif ($urlParam[1] == "activeachieve") {
-                //     $result = $this->campaignactiveachieve($data, $loginData);
-                //     return $result;
-                // } elseif ($urlParam[1] == "deactiveachieve") {
-                //     $result = $this->campaigndeactiveachieve($data, $loginData);
-                //     return $result;
+                } else if ($urlParam[1] === 'archive') {
+                    if ($urlParam[2] === 'list') {
+                        $result = $this->getCampaignArchiveDetails($data, $loginData);
+                        return $result;
+                    }
+                    // } elseif ($urlParam[1] == "activeachieve") {
+                    //     $result = $this->campaignactiveachieve($data, $loginData);
+                    //     return $result;
+                    // } elseif ($urlParam[1] == "deactiveachieve") {
+                    //     $result = $this->campaigndeactiveachieve($data, $loginData);
+                    //     return $result;
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -129,7 +142,7 @@ class SMSCampaignMODEL extends APIRESPONSE
                  JOIN cmp_sms_templates AS wt ON wt.id = c.template_id
         WHERE c.status = 1  
         AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData);
-// print_r($countQuery);exit;
+            // print_r($countQuery);exit;
             $countResult = $db->query($countQuery);
             $countRow = $countResult->fetch_assoc();
             $recordCount = $countRow['totalCount']; // Total record count
@@ -224,7 +237,7 @@ class SMSCampaignMODEL extends APIRESPONSE
                       WHERE c.id = $id AND c.status = 1 AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData) . " 
                       ";
 
-// print_r($sql);exit;
+            // print_r($sql);exit;
             $result = $db->query($sql);
 
             // Check if Store exists
@@ -274,6 +287,191 @@ class SMSCampaignMODEL extends APIRESPONSE
         }
     }
 
+    private function reportSmscampaign($data, $loginData)
+    {
+        try {
+            $db = $this->dbConnect();
+            // Validate pageIndex and dataLength
+            // Check if pageIndex and dataLength are not empty
+            if ($data['pageIndex'] === "") {
+                throw new Exception("PageIndex should not be empty!");
+            }
+            if ($data['dataLength'] == "") {
+                throw new Exception("dataLength should not be empty!");
+            }
+
+            $start_index = $data['pageIndex'] * $data['dataLength'];
+            $end_index = $data['dataLength'];
+
+            // Validate input dates
+            $fromDate = !empty($data['fromDate']) ? $db->real_escape_string($data['fromDate']) : null;
+            $toDate = !empty($data['toDate']) ? $db->real_escape_string($data['toDate']) : null;
+
+            if (!$fromDate || !$toDate) {
+                throw new Exception("Please provide both fromDate and toDate.");
+            }
+
+            $vendorId = $this->getVendorIdByUserId($loginData);
+
+            // Summary of message status counts by date
+            $statusQuery = " SELECT 
+                DATE(created_date) AS date,
+                COUNT(*) AS submitted, 
+                SUM(message_status = 'delivered') AS delivered,
+                SUM(message_status = 'failed') AS failed,
+                SUM(message_status = 'queued') AS awaited
+            FROM cmp_sms_messages
+            WHERE vendor_id = '$vendorId'
+            AND DATE(created_date) BETWEEN '$fromDate' AND '$toDate'
+            GROUP BY DATE(created_date)
+            ORDER BY DATE(created_date) ASC
+            LIMIT $start_index, $end_index
+        ";
+        
+            // print_r($statusQuery);exit;
+            $statusResult = $db->query($statusQuery);
+
+            $smsCampaignDetails = [];
+            $totalSubmitted = $totalDelivered = $totalFailed = $totalAwaited = 0;
+
+            while ($row = $statusResult->fetch_assoc()) {
+                $submittedCount = (int)$row['submitted'];
+                $deliveredCount = (int)$row['delivered'];
+                $failedCount = (int)$row['failed'];
+                $awaitedCount = (int)$row['awaited'];
+
+                // Calculate submited as the total count of awaited, delivered, and failed
+                $submitedCount = $awaitedCount + $deliveredCount + $failedCount;
+
+                $smsCampaignDetails[] = [
+                    "date" => date("d-m-Y", strtotime($row['date'])),
+                    "submited" => $submitedCount,  // Updated here
+                    "delivered" => $deliveredCount,
+                    "failed" => $failedCount,
+                    "awaited" => $awaitedCount
+                ];
+
+                $totalSubmitted += $submitedCount;  // Add to total
+                $totalDelivered += $deliveredCount;
+                $totalFailed += $failedCount;
+                $totalAwaited += $awaitedCount;
+            }
+
+            return [
+                "apiStatus" => [
+                    "code" => "200",
+                    "message" => "Sms Campaign Report details fetched successfully"
+                ],
+                "result" => [
+                    "pageIndex" => $data['pageIndex'],
+                    "dataLength" => $data['dataLength'],
+                    "totalSubmitedCount" => $totalSubmitted,
+                    "totalDeliveredCount" => $totalDelivered,
+                    "totalFailedCount" => $totalFailed,
+                    "totalAwaitedCount" => $totalAwaited,
+                    "smsCampaignDetails" => $smsCampaignDetails
+                ]
+            ];
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "401",
+                    "message" => $e->getMessage()
+                ]
+            ];
+        }
+    }
+
+    public function exportSmsCampaignToExcel($data, $loginData)
+    {
+        try {
+            $db = $this->dbConnect();
+            // Validate input dates
+            $fromDate = !empty($data['fromDate']) ? $db->real_escape_string($data['fromDate']) : null;
+            $toDate = !empty($data['toDate']) ? $db->real_escape_string($data['toDate']) : null;
+
+            if (!$fromDate || !$toDate) {
+                throw new Exception("Please provide both fromDate and toDate.");
+            }
+
+            $vendorId = $this->getVendorIdByUserId($loginData);
+
+            // Fetch SMS campaign summary
+            $statusQuery = "
+                SELECT 
+                    DATE(created_date) AS date,
+                    COUNT(*) AS submitted, 
+                    SUM(message_status = 'delivered') AS delivered,
+                    SUM(message_status = 'failed') AS failed,
+                    SUM(message_status = 'queued') AS awaited
+                FROM cmp_sms_messages
+                WHERE vendor_id = '$vendorId'
+                AND DATE(created_date) BETWEEN '$fromDate' AND '$toDate'
+                GROUP BY DATE(created_date)
+                ORDER BY DATE(created_date) ASC
+            ";
+            // print_r($statusQuery);exit;
+            $result = $db->query($statusQuery);
+
+            if ($result->num_rows === 0) {
+                throw new Exception("No SMS campaign data found for the given date range.");
+            }
+
+            // Create Excel
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+
+            // Set column headers
+            $headers = ['S.No', 'Date', 'Submitted', 'Delivered', 'Failed', 'Awaited'];
+            $column = 'A';
+            foreach ($headers as $header) {
+                $sheet->setCellValue($column . '1', $header);
+                $sheet->getStyle($column . '1')->getFont()->setBold(true);
+                $sheet->getStyle($column . '1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getColumnDimension($column)->setAutoSize(true);
+                $column++;
+            }
+
+            // Fill data
+            $rowIndex = 2;
+            $sno = 1;
+            while ($row = $result->fetch_assoc()) {
+                $submitted = (int)$row['submitted'];
+                $delivered = (int)$row['delivered'];
+                $failed = (int)$row['failed'];
+                $awaited = (int)$row['awaited'];
+                $submitedCount = $delivered + $failed + $awaited;
+
+                $sheet->setCellValue('A' . $rowIndex, $sno++);
+                $sheet->setCellValue('B' . $rowIndex, date("d-m-Y", strtotime($row['date'])));
+                $sheet->setCellValue('C' . $rowIndex, $submitedCount);
+                $sheet->setCellValue('D' . $rowIndex, $delivered);
+                $sheet->setCellValue('E' . $rowIndex, $failed);
+                $sheet->setCellValue('F' . $rowIndex, $awaited);
+                $rowIndex++;
+            }
+
+            // Clean output buffer if any
+            if (ob_get_contents()) ob_end_clean();
+
+            // Download headers
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="SMS_Campaign_Report_' . date('Ymd_His') . '.xlsx"');
+            header('Cache-Control: max-age=0');
+
+            // Output Excel file
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+            exit;
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "500",
+                    "message" => $e->getMessage()
+                ]
+            ];
+        }
+    }
 
 
     /**
@@ -302,8 +500,8 @@ class SMSCampaignMODEL extends APIRESPONSE
 
             // Fetch Template ID
             $templateId = mysqli_real_escape_string($db, $data['templateId']);
-            $sql = "SELECT id FROM cmp_sms_templates WHERE template_id = '$templateId' AND status = 1 AND vendor_id = '$vendor_id' AND active_status = 1 AND sender_id = '". $data['senderId']."'";
-   
+            $sql = "SELECT id,template_id FROM cmp_sms_templates WHERE template_id = '$templateId' AND status = 1 AND vendor_id = '$vendor_id' AND active_status = 1 AND sender_id = '" . $data['senderId'] . "'";
+
             $result = mysqli_query($db, $sql);
             if (!$result || mysqli_num_rows($result) == 0) {
                 throw new Exception("Template ID not found");
@@ -328,37 +526,37 @@ class SMSCampaignMODEL extends APIRESPONSE
                     ],
                 ];
             }
-            //check the campaign title is already exist or not
-            $title = mysqli_real_escape_string($db, $data['title']);
-            $sql = "SELECT COUNT(*) as count FROM cmp_sms_campaign WHERE title = '$title' AND status = 1 ";
-            $result = mysqli_query($db, $sql);
-            $row = mysqli_fetch_assoc($result);
-            if ($row['count'] > 0) {
-                $db->close();
-                return [
-                    "apiStatus" => [
-                        "code"    => "400",
-                        "message" => "Campaign title already exists",
-                    ],
-                ];
-            }
+            // //check the campaign title is already exist or not
+            // $title = mysqli_real_escape_string($db, $data['title']);
+            // $sql = "SELECT COUNT(*) as count FROM cmp_sms_campaign WHERE title = '$title' AND status = 1 ";
+            // $result = mysqli_query($db, $sql);
+            // $row = mysqli_fetch_assoc($result);
+            // if ($row['count'] > 0) {
+            //     $db->close();
+            //     return [
+            //         "apiStatus" => [
+            //             "code"    => "400",
+            //             "message" => "Campaign title already exists",
+            //         ],
+            //     ];
+            // }
 
             // Fetch Timezone details
             if (!empty($data['timezone']) && !empty($data['timezone'])) {
-            $timezone_zoneName = mysqli_real_escape_string($db, $data['timezone']['zoneName']);
-            $timezone_id = mysqli_real_escape_string($db, $data['timezone']['id']);
+                $timezone_zoneName = mysqli_real_escape_string($db, $data['timezone']['zoneName']);
+                $timezone_id = mysqli_real_escape_string($db, $data['timezone']['id']);
 
-            $checkTimezoneQuery = "SELECT COUNT(*) as count FROM cmp_mst_timezone WHERE id = '$timezone_id' AND timezone_name = '$timezone_zoneName'";
-            $result = $db->query($checkTimezoneQuery);
-            $row = $result->fetch_assoc();
+                $checkTimezoneQuery = "SELECT COUNT(*) as count FROM cmp_mst_timezone WHERE id = '$timezone_id' AND timezone_name = '$timezone_zoneName'";
+                $result = $db->query($checkTimezoneQuery);
+                $row = $result->fetch_assoc();
 
-            if ($row['count'] == 0) {
-                // Optionally throw exception
+                if ($row['count'] == 0) {
+                    // Optionally throw exception
+                }
             }
-        }
-        // print_r($timezone_zoneName); 
-        // echo'<br>';
-        // echo"rgrg";exit;
+            // print_r($timezone_zoneName); 
+            // echo'<br>';
+            // echo"rgrg";exit;
             // Validate Variables only if isVariable is true
             if (!empty($data['isVariable']) && !empty($data['variableIds'])) {
                 foreach ($data['variableIds'] as $variable) {
@@ -380,8 +578,8 @@ class SMSCampaignMODEL extends APIRESPONSE
             // Schedule Time
             $scheduleAt = !empty($data['scheduleStatus']) && $data['scheduleStatus'] === true
                 ? mysqli_real_escape_string($db, $data['scheduledAt'])
-                : date('Y-m-d H:i:s'); 
-// print_r($scheduleAt);exit;
+                : date('Y-m-d H:i:s');
+            // print_r($scheduleAt);exit;
             // Insert Campaign
             $title = mysqli_real_escape_string($db, $data['title']);
             // $mediaId = mysqli_real_escape_string($db, $data['mediaId']?? '');
@@ -401,13 +599,57 @@ class SMSCampaignMODEL extends APIRESPONSE
 
             // Write to file.txt after successful insert
             if (!empty($data['scheduleStatus']) && $data['scheduleStatus'] === true) {
+                // Proceed to send immediately
+                $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
+
+                if ($fetchResponse['apiStatus']['code'] != "200") {
+                    return $fetchResponse;
+                }
+
+                $contacts = $fetchResponse['result']['contacts'];
+
+
+                //    print_r($contacts);exit;
+                // Insert into cmp_sms_campaign_contact_mapping
+                // foreach ($contacts as $contact) {
+                //     $insertContact = "INSERT INTO cmp_sms_campaign_contact_mapping (campaign_id, contact_id, created_by) 
+                //     VALUES ('$campaign_id', '" . $contact['contactId'] . "', '$createdBy')";
+                //     if (!mysqli_query($db, $insertContact)) {
+                //         throw new Exception("Error inserting contact mapping: " . mysqli_error($db));
+                //     }
+                // }
+
+                // Insert into cmp_sms_messages
+
+                foreach ($contacts as $contact) {
+                    //insert the queue for the sms camapaign queue 
+                    $insertqueue = "INSERT INTO cmp_sms_messages (vendor_id,campaign_id, campaign_schedule,template_id,sender_id,mobile, template_name, message_status,created_by, created_date)
+                 VALUES ('$vendor_id','$campaign_id','1','$template_id', '" . $data['senderId'] . "','" . $contact['mobile'] . "', '" . $data['templateName'] . "', 'queued','" . $loginData['user_id'] . "', NOW())";
+                    if (!mysqli_query($db, $insertqueue)) {
+                        throw new Exception("Error inserting into queue: " . mysqli_error($db));
+                    }
+                }
+                // Write to file.txt
                 $fileData = "SmsCampaignID: $campaign_id | vendorId: $vendor_id | Timezone: $timezone_zoneName | ScheduleAt: $scheduleAt |createdBy: {$loginData['user_id']}| Status: Scheduled" . PHP_EOL;
-                file_put_contents("smsfile.txt", $fileData, FILE_APPEND);
+                file_put_contents("Smsfile.txt", $fileData, FILE_APPEND);
             }
 
             // If not scheduled, update the send_status to 'Executed'
             if (empty($data['scheduleStatus']) || $data['scheduleStatus'] === false) {
-                $updateSql = "UPDATE cmp_campaign SET send_status = 'Executed' WHERE id = '$campaign_id'";
+
+                $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
+
+                if ($fetchResponse['apiStatus']['code'] != "200") {
+                    return $fetchResponse;
+                }
+
+                $contacts = $fetchResponse['result']['contacts'];
+
+                // print_r($contacts);exit;
+                // Send WhatsApp Message
+                $call = new SMSMODEL();
+                $resulthhtp = $call->sendMessagee($contacts, $loginData, $campaign_id, $data['bodycontent'], $templateId);
+                $updateSql = "UPDATE cmp_sms_campaign SET send_status = 'Executed' WHERE id = '$campaign_id'";
                 if (!mysqli_query($db, $updateSql)) {
                     throw new Exception("Error updating send status: " . mysqli_error($db));
                 }
@@ -456,6 +698,66 @@ class SMSCampaignMODEL extends APIRESPONSE
     }
 
 
+    private function getUsingCampCredentials($data, $loginData)
+    {
+        try {
+            $groupID = $data['groupDetails']['groupId'];
+            $db = $this->dbConnect();
+            // Fetch group details with user-provided group name
+            $queryService = "SELECT 
+            gc.id AS groupId,
+            gc.group_name AS groupName,
+            gc.active_status AS activeStatus,
+            c.id AS contactId,
+            c.first_name AS firstName,
+            c.last_name AS lastName,
+            c.mobile,
+            c.email,
+            c.country,
+            c.language_code
+        FROM cmp_group_contact_mapping AS gcm
+        LEFT JOIN cmp_group_contact AS gc ON gc.id = gcm.group_id
+        LEFT JOIN cmp_contact AS c ON c.id = gcm.contact_id
+        WHERE gc.status = 1 
+            AND gcm.status = 1
+            AND c.status = 1
+            AND gc.active_status = 1  
+            AND gc.id = $groupID 
+            AND gc.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
+        ORDER BY gc.id DESC";
+            // print_r($queryService);exit;
+            $result = $db->query($queryService);
+            $rowCount = mysqli_num_rows($result);
+
+            if ($rowCount > 0) {
+                $contacts = [];
+                while ($row = mysqli_fetch_assoc($result)) {
+                    $contacts[] = $row;
+                }
+
+
+                return [
+                    "apiStatus" => [
+                        "code" => "200",
+                        "message" => "Contacts and template fetched successfully",
+                    ],
+                    "result" => [
+                        "contacts" => $contacts,
+
+                    ]
+                ];
+            } else {
+                throw new Exception("No contacts found for the provided group.");
+            }
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "401",
+                    "message" => $e->getMessage(),
+                ],
+            ];
+        }
+    }
 
 
 
@@ -466,7 +768,7 @@ class SMSCampaignMODEL extends APIRESPONSE
     {
         try {
             $db = $this->dbConnect();
-            if (empty($data['templateId'])) {
+            if (empty($data['id'])) {
                 throw new Exception("Invalid. Please enter your ID.");
             }
 
@@ -475,7 +777,7 @@ class SMSCampaignMODEL extends APIRESPONSE
             $contactCountQuery = "SELECT COUNT(DISTINCT con.id) AS contactCount FROM cmp_sms_campaign AS c 
    left JOIN cmp_group_contact_mapping AS gcm ON gcm.group_id = c.group_id
     left JOIN cmp_contact AS con ON con.id = gcm.contact_id
-   WHERE c.id='" . $data['templateId'] . "'";
+   WHERE c.id='" . $data['id'] . "'";
 
             $contactCountResult = $db->query($contactCountQuery);
             $contactCountRow = $contactCountResult->fetch_assoc();
@@ -493,7 +795,7 @@ class SMSCampaignMODEL extends APIRESPONSE
             LEFT JOIN cmp_group_contact_mapping AS gcm ON gcm.group_id = c.group_id
             LEFT JOIN cmp_contact AS con ON con.id = gcm.contact_id
             LEFT JOIN cmp_campaign_contact AS cc ON cc.contact_id = con.id AND cc.campaign_id = c.id
-            WHERE c.id='" . $data['templateId'] . "' 
+            WHERE c.id='" . $data['id'] . "' 
             AND c.status = 1 
             AND wt.status = 1 
             AND c.created_by = '" . $loginData['user_id'] . "' 
@@ -631,6 +933,7 @@ class SMSCampaignMODEL extends APIRESPONSE
     public function getsmsCampaignQueueDetails($data, $loginData, $urlParam)
     {
         try {
+            // echo"122";exit;
             $db = $this->dbConnect();
             // Validate pageIndex and dataLength
             if (isset($data['pageIndex']) && isset($data['pageIndex'])) {
@@ -640,9 +943,9 @@ class SMSCampaignMODEL extends APIRESPONSE
 
             $campaign_id = mysqli_real_escape_string($db, $data['campaignId']);
             // Fetch queue data for the given campaign
-            $query = "SELECT wmq.id, c.first_name, c.last_name, wmq.phone_number, wmq.template_name, wmq.message_status, wmq.updated_date, wmq.error_message
-                        FROM cmp_sms_message_queue AS wmq
-                        LEFT JOIN cmp_contact AS c ON c.mobile = wmq.phone_number AND c.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
+            $query = "SELECT wmq.id, c.first_name, c.last_name, wmq.mobile, wmq.template_name, wmq.message_status, wmq.updated_date, wmq.reason
+                        FROM cmp_sms_messages AS wmq
+                        LEFT JOIN cmp_contact AS c ON c.mobile = wmq.mobile AND c.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
                         WHERE wmq.campaign_id = '$campaign_id' AND wmq.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
                         ";
             if ($urlParam[3] === 'queue') {
@@ -652,12 +955,14 @@ class SMSCampaignMODEL extends APIRESPONSE
                 $query .= " AND wmq.message_status != 'queued'";
                 $message = "executed";
             }
-            if ($data['fiterBy']) {
-                $query .= " AND wmq.phone_number LIKE '%" . mysqli_real_escape_string($db, $data['fiterBy']) . "%' or wmq.template_name LIKE '%" . mysqli_real_escape_string($db, $data['fiterBy']) . "%' 
-                            or wmq.message_status LIKE '%" . mysqli_real_escape_string($db, $data['fiterBy']) . "%' ";
+            if ($data['filterBy']) {
+                $query .= " AND wmq.mobile LIKE '%" . mysqli_real_escape_string($db, $data['filterBy']) . "%' or c.first_name LIKE '%" . mysqli_real_escape_string($db, $data['filterBy']) . "%' 
+                            or wmq.message_status LIKE '%" . mysqli_real_escape_string($db, $data['filterBy']) . "%' 
+                            or c.last_name LIKE '%" . mysqli_real_escape_string($db, $data['filterBy']) . "%'
+                            ";
             }
             $query .= " ORDER BY wmq.created_date DESC";
-
+            // print_r($query);exit;
             if (isset($data['pageIndex']) && isset($data['dataLength'])) {
                 $query .= " LIMIT $start_index, $end_index";
             }
@@ -698,7 +1003,7 @@ class SMSCampaignMODEL extends APIRESPONSE
         try {
             $db = $this->dbConnect();
             $sql = "SELECT COUNT(*) as count
-            FROM cmp_whatsapp_message_queue
+            FROM cmp_sms_messages
             WHERE campaign_id = '$campaign_id'";
             // print_r($sql);exit; 
             $result = $db->query($sql);
@@ -742,7 +1047,7 @@ class SMSCampaignMODEL extends APIRESPONSE
             if ($db->query($ActiveQuery) === true) {
                 $db->close();
                 $statusCode = "200";
-                $statusMessage = " Sms Campaign activated successfully.";
+                $statusMessage = " Sms Campaign archive successfully.";
             } else {
                 $statusCode = "500";
                 $statusMessage = "Unable to activate Sms Campaign, please try again later.";
@@ -849,10 +1154,10 @@ class SMSCampaignMODEL extends APIRESPONSE
             if ($db->query($deactiveQuery) === true) {
                 $db->close();
                 $statusCode = "200";
-                $statusMessage = "Sms Campaign Deactivated successfully.";
+                $statusMessage = "Sms Campaign Unarchived successfully.";
             } else {
                 $statusCode = "500";
-                $statusMessage = "Unable to Deactivate sms Campaign, please try again later.";
+                $statusMessage = "Unable to Unarchived sms Campaign, please try again later.";
             }
             $resultArray = array(
                 "apiStatus" => array(
@@ -1153,100 +1458,100 @@ class SMSCampaignMODEL extends APIRESPONSE
         }
     }
 
-    // public function getCampaignArchiveDetails($data, $loginData)
-    // {
-    //     try {
-    //         $responseArray = ''; // Initializing response variable
-    //         $db = $this->dbConnect();
+    public function getCampaignArchiveDetails($data, $loginData)
+    {
+        try {
+            $responseArray = ''; // Initializing response variable
+            $db = $this->dbConnect();
 
 
-    //         // Check if pageIndex and dataLength are not empty
-    //         if ($data['pageIndex'] === "") {
-    //             throw new Exception("PageIndex should not be empty!");
-    //         }
-    //         if ($data['dataLength'] == "") {
-    //             throw new Exception("dataLength should not be empty!");
-    //         }
+            // Check if pageIndex and dataLength are not empty
+            if ($data['pageIndex'] === "") {
+                throw new Exception("PageIndex should not be empty!");
+            }
+            if ($data['dataLength'] == "") {
+                throw new Exception("dataLength should not be empty!");
+            }
 
-    //         $start_index = $data['pageIndex'] * $data['dataLength'];
-    //         $end_index = $data['dataLength'];
-    //         // Get the total record count before applying the LIMIT
-    //         $countQuery = "SELECT COUNT(*) AS totalCount 
-    //  FROM cmp_campaign AS c
-    //  JOIN cmp_whatsapp_templates AS wt ON wt.id = c.template_id
-    //  WHERE c.status = 1  AND wt.status = 1 AND c.active_status=0
-    //  AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData);
-    //         // print_r($countQuery);exit;
-    //         $countResult = $db->query($countQuery);
-    //         $countRow = $countResult->fetch_assoc();
-    //         $recordCount = $countRow['totalCount']; // Total record count
+            $start_index = $data['pageIndex'] * $data['dataLength'];
+            $end_index = $data['dataLength'];
+            // Get the total record count before applying the LIMIT
+            $countQuery = "SELECT COUNT(*) AS totalCount 
+     FROM cmp_sms_campaign AS c
+     JOIN cmp_sms_templates AS wt ON wt.id = c.template_id
+     WHERE c.status = 1  AND wt.status = 1 AND c.active_status=0
+     AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData);
+            // print_r($countQuery);exit;
+            $countResult = $db->query($countQuery);
+            $countRow = $countResult->fetch_assoc();
+            $recordCount = $countRow['totalCount']; // Total record count
 
-    //         // Query to fetch vendors and their contact persons0
-    //         $queryService = "SELECT c.id,c.title,c.template_id,c.created_date,c.active_status,c.schedule_at,c.send_status,c.status AS campaignStatus,wt.template_name,wt.language
-    //           FROM cmp_campaign AS c 
-    //           JOIN cmp_whatsapp_templates AS wt ON wt.id = c.template_id
-    //           WHERE c.status = 1 AND c.active_status=0 AND wt.status=1 AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
-    //           ORDER BY id DESC 
-    //           LIMIT $start_index, $end_index";
+            // Query to fetch vendors and their contact persons0
+            $queryService = "SELECT c.id,c.title,c.template_id,c.created_date,c.active_status,c.schedule_at,c.send_status,c.status AS campaignStatus,wt.template_name,wt.language
+              FROM cmp_sms_campaign AS c 
+              JOIN cmp_sms_templates AS wt ON wt.id = c.template_id
+              WHERE c.status = 1 AND c.active_status=0 AND wt.status=1 AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
+              ORDER BY id DESC 
+              LIMIT $start_index, $end_index";
 
-    //         //   print_r($queryService);exit;
-    //         $result = $db->query($queryService);
-    //         $row_cnt = mysqli_num_rows($result);
+            //   print_r($queryService);exit;
+            $result = $db->query($queryService);
+            $row_cnt = mysqli_num_rows($result);
 
-    //         $group = array(); // Initialize array to hold Store data
-    //         if ($row_cnt > 0) {
-    //             while ($row = $result->fetch_assoc()) {
-    //                 $group[] = array(
-    //                     "id" => $row['id'],
-    //                     "title" => $row['title'],
-    //                     "templateName" => $row['template_name'],
-    //                     "tempLang" => $row['language'],
-    //                     "activeStatus" => $row['active_status'],
-    //                     "createdDate" => $row['created_date'],
-    //                     "scheduleAt" => $row['schedule_at'],
-    //                     "sendStatus" => $row['send_status'],
-    //                     "status" => $row['campaignStatus']
-    //                 );
-    //             }
-    //         }
+            $group = array(); // Initialize array to hold Store data
+            if ($row_cnt > 0) {
+                while ($row = $result->fetch_assoc()) {
+                    $group[] = array(
+                        "id" => $row['id'],
+                        "title" => $row['title'],
+                        "templateName" => $row['template_name'],
+                        "tempLang" => $row['language'],
+                        "activeStatus" => $row['active_status'],
+                        "createdDate" => $row['created_date'],
+                        "scheduleAt" => $row['schedule_at'],
+                        "sendStatus" => $row['send_status'],
+                        "status" => $row['campaignStatus']
+                    );
+                }
+            }
 
-    //         // Construct the final response array
-    //         $responseArray = array(
-    //             "pageIndex" => $data['pageIndex'],
-    //             "dataLength" => $data['dataLength'],
-    //             "totalRecordCount" => $recordCount,
-    //             'CampaignDataList' => array_values($group), // Reset array keys
-    //         );
+            // Construct the final response array
+            $responseArray = array(
+                "pageIndex" => $data['pageIndex'],
+                "dataLength" => $data['dataLength'],
+                "totalRecordCount" => $recordCount,
+                'CampaignDataList' => array_values($group), // Reset array keys
+            );
 
-    //         // Check if Store data exists
-    //         if (!empty($group)) {
-    //             $resultArray = array(
-    //                 "apiStatus" => array(
-    //                     "code" => "200",
-    //                     "message" => "Campaign details fetched successfully",
-    //                 ),
-    //                 "result" => $responseArray,
-    //             );
-    //         } else {
-    //             $resultArray = array(
-    //                 "apiStatus" => array(
-    //                     "code" => "404",
-    //                     "message" => "No data found...",
-    //                 ),
-    //             );
-    //         }
+            // Check if Store data exists
+            if (!empty($group)) {
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "200",
+                        "message" => "Campaign details fetched successfully",
+                    ),
+                    "result" => $responseArray,
+                );
+            } else {
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "404",
+                        "message" => "No data found...",
+                    ),
+                );
+            }
 
-    //         // Return the result array
-    //         return $resultArray;
-    //     } catch (Exception $e) {
-    //         return array(
-    //             "apiStatus" => array(
-    //                 "code" => "500",
-    //                 "message" => $e->getMessage(),
-    //             ),
-    //         );
-    //     }
-    // }
+            // Return the result array
+            return $resultArray;
+        } catch (Exception $e) {
+            return array(
+                "apiStatus" => array(
+                    "code" => "500",
+                    "message" => $e->getMessage(),
+                ),
+            );
+        }
+    }
     //multiple Delete for campaign Id 
 
     private function selecteddatagroupDelete($data, $loginData)

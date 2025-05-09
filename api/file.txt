@@ -1,3 +1,2 @@
-CampaignID: 54 | vendorId: 3 | Timezone: Asia/Kolkata | ScheduleAt: 2025-05-08 12:19:00 |createdBy: 11| Status: Scheduled
 CampaignID: 1 | vendorId: 3 | Timezone: Asia/Kolkata | ScheduleAt: 2025-05-08 12:19:00 |createdBy: 11| Status: Scheduled
 CampaignID: 2 | vendorId: 3 | Timezone: Asia/Kolkata | ScheduleAt: 2025-05-08 12:19:00 |createdBy: 11| Status: Scheduled

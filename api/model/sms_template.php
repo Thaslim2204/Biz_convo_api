@@ -23,7 +23,13 @@ class SMSTemplateMODEL extends APIRESPONSE
                 $urlParam = explode('/', $urlPath);
                 if ($urlParam[1] == "get") {
                     $result = $this->getSmsTemplate($data, $loginData);
-                } elseif ($urlParam[1] === 'storedropdown') {
+                } elseif ($urlParam[1] === 'id_dropdown') { //template id dropdown list
+                    $result = $this->smsTemplateIdDropdown($data, $loginData);
+                    return $result;
+                } elseif ($urlParam[1] === 'sender_id_dropdown') {
+                    $result = $this->smsSenderIdDropdown($data, $loginData);
+                    return $result;
+                }elseif ($urlParam[1] === 'storedropdown') {
                     // $result = $this->getStoredropdown($data, $loginData);
                     // return $result;
                     // } elseif ($urlParam[1] === 'exportstoretoexcel') {
@@ -138,9 +144,9 @@ class SMSTemplateMODEL extends APIRESPONSE
             $rowCount = $resultCount->fetch_assoc();
             $recordCount = $rowCount['totalrecordcount'];
             // Check if record count is greater than 0
-            if ($recordCount <= 0) {
-                throw new Exception("No data found...");
-            }
+            // if ($recordCount <= 0) {
+            //     throw new Exception("No data found...");
+            // }
             // Query to fetch vendors and their contact persons0
             $queryService = "SELECT id,vendor_id,sender_id,template_id,template_name,sms_type,language,template_content,created_by,created_date,active_status,test_mobile 
             FROm cmp_sms_templates 
@@ -299,7 +305,144 @@ class SMSTemplateMODEL extends APIRESPONSE
     }
 
 
-
+    public function smsTemplateIdDropdown($data, $loginData)
+    {
+        try {
+ 
+            $responseArray = '';
+            $db = $this->dbConnect();
+            $userId = $loginData['user_id'];
+ 
+            //get the vendor id from the login data
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $userId";
+            $result = $db->query($sql);
+            if ($result) {
+                $row = $result->fetch_assoc();
+                if (!$row || !isset($row['vendor_id'])) {
+                    throw new Exception("Vendor ID not found for user ID: $userId");
+                }
+                $vendorId = $row['vendor_id'];
+            } else {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+ 
+            $queryService = "SELECT id,template_id,template_name
+            FROm cmp_sms_templates
+                 WHERE status = 1 AND vendor_id = " . $vendorId . "  
+                 ";
+ 
+            //   print_r($queryService);exit;
+            $result = $db->query($queryService);
+            $row_cnt = mysqli_num_rows($result);
+            $smsData = array(); // Initialize array to hold Store data
+            if ($row_cnt > 0) {
+                while ($row = $result->fetch_assoc()) {
+                    $smsData[] = array(
+                        "id" => $row['id'],
+                        "templateId" => $row['template_id'],
+                    );
+                }
+            }
+ 
+            // Check if Store data exists
+            if (!empty($smsData)) {
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "200",
+                        "message" => "Sms Template ID list fetched successfully",
+                    ),
+                    "result" => $smsData,
+                );
+            } else {
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "404",
+                        "message" => "No data found...",
+                    ),
+                );
+            }
+ 
+            // Return the result array
+            return $resultArray;
+        } catch (Exception $e) {
+            return array(
+                "apiStatus" => array(
+                    "code" => "500",
+                    "message" => $e->getMessage(),
+                )
+            );
+        }
+    }
+ 
+    public function smsSenderIdDropdown($data, $loginData)
+    {
+        try {
+ 
+            $responseArray = '';
+            $db = $this->dbConnect();
+            $userId = $loginData['user_id'];
+ 
+            //get the vendor id from the login data
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $userId";
+            $result = $db->query($sql);
+            if ($result) {
+                $row = $result->fetch_assoc();
+                if (!$row || !isset($row['vendor_id'])) {
+                    throw new Exception("Vendor ID not found for user ID: $userId");
+                }
+                $vendorId = $row['vendor_id'];
+            } else {
+                throw new Exception("Database query failed: " . $db->error);
+            }
+ 
+            $queryService = "SELECT id, sender_id
+            FROm cmp_vendor_sms_credentials
+                 WHERE status = 1 AND vendor_id = " . $vendorId . "  
+                 ";
+ 
+            //   print_r($queryService);exit;
+            $result = $db->query($queryService);
+            $row_cnt = mysqli_num_rows($result);
+            $smsData = array(); // Initialize array to hold Store data
+            if ($row_cnt > 0) {
+                while ($row = $result->fetch_assoc()) {
+                    $smsData[] = array(
+                        "id" => $row['id'],
+                        "senderId" => $row['sender_id'],
+                    );
+                }
+            }
+ 
+            // Check if Store data exists
+            if (!empty($smsData)) {
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "200",
+                        "message" => "Sms Template ID list fetched successfully",
+                    ),
+                    "result" => $smsData,
+                );
+            } else {
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "404",
+                        "message" => "No data found...",
+                    ),
+                );
+            }
+ 
+            // Return the result array
+            return $resultArray;
+        } catch (Exception $e) {
+            return array(
+                "apiStatus" => array(
+                    "code" => "500",
+                    "message" => $e->getMessage(),
+                )
+            );
+        }
+    }
+ 
     /**
      * Post/Add tenant
      *

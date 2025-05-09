@@ -490,7 +490,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
             // Fetch campaign details with contacts
             $queryService = "SELECT DISTINCT 
             c.id, c.title, c.template_id, c.created_date, c.send_status,
-            c.active_status, c.schedule_at, c.status AS campaignStatus, 
+            c.active_status, c.schedule_at, c.created_by,c.status AS campaignStatus, 
             wt.template_name, wt.language, 
             con.first_name, con.last_name, con.mobile, con.email,
             con.status AS contactStatus, con.created_date AS contactCreatedDate 
@@ -518,6 +518,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
                     "tempalte_language" => $row['language'],
                     "scheduleAt" => $row['schedule_at'],
                     "sendStatus" => $row['send_status'],
+                    "createdAt" => $row['created_date'],
                     "status" => $row['campaignStatus']
                 ];
 

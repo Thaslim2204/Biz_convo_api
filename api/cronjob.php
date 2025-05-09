@@ -449,7 +449,7 @@ class CampaignScheduler
         $lock_file = 'whatsapp_cron.lock';
 
         // Step 1: Check if lock file exists and is recent (last 5 minutes)
-        if (file_exists($lock_file) && (time() - filemtime($lock_file)) < 300) {
+        if (file_exists($lock_file)) {
             echo "Another execution is already running. Exiting...\n";
             return;
         }
