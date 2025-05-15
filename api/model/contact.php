@@ -168,7 +168,7 @@ class CONTACTMODEL extends APIRESPONSE
             s.store_name
         
             FROM cmp_contact c
-            JOIN cmp_store s ON c.store_id = s.id
+           left JOIN cmp_store s ON c.store_id = s.id
 
                     WHERE c.status = 1  
                     -- AND c.created_by = " . $loginData['user_id'] . " 
@@ -314,17 +314,17 @@ class CONTACTMODEL extends APIRESPONSE
             c.status, 
             s.id AS store_id, 
             s.store_name, 
-            GROUP_CONCAT(DISTINCT gc.group_name) AS group_names,
-            GROUP_CONCAT(DISTINCT gcm.group_id) AS group_ids
+            GROUP_CONCAT( gc.group_name) AS group_names,
+            GROUP_CONCAT( gcm.group_id) AS group_ids
         FROM cmp_contact c
-        JOIN cmp_store s ON c.store_id = s.id
+       left JOIN cmp_store s ON c.store_id = s.id
         LEFT JOIN cmp_group_contact_mapping gcm ON c.id = gcm.contact_id AND gcm.status = 1
         LEFT JOIN cmp_group_contact gc ON gcm.group_id = gc.id
         WHERE c.status = 1 
             AND c.created_by = $userId 
             AND c.id = $id
         GROUP BY c.id";
-
+// print_r($sql);exit;
 
             $result = $db->query($sql);
 
@@ -850,6 +850,7 @@ class CONTACTMODEL extends APIRESPONSE
     // }
     public function importContactFromExcel($data, $loginData)
     {
+        // print_r("data");exit;
         $resultArray = [];
         try {
             $db = $this->dbConnect();
@@ -934,7 +935,7 @@ class CONTACTMODEL extends APIRESPONSE
                 //     throw new Exception("Invalid or missing required fields in row: " . json_encode($row));
                 // }
                 if (empty($firstName)) {
-                    throw new Exception("Invalid data found in row: Address is missing.");
+                    throw new Exception("Invalid data found in row: First Name is missing.");
                 }
                 if (empty($mobile)) {
                     throw new Exception("Invalid data found in row: Mobile number is missing.");
@@ -1101,7 +1102,7 @@ class CONTACTMODEL extends APIRESPONSE
 
 
              FROM cmp_contact c 
-                  JOIN cmp_store s ON s.id = c.store_id                  
+                 Left JOIN cmp_store s ON s.id = c.store_id                  
                   WHERE c.status = 1 AND vendor_id= $vendor_id AND c.created_by='" . $loginData['user_id'] . "'";
             // print_r($query);exit;
             $result = $db->query($query);

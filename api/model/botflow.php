@@ -399,7 +399,7 @@ class BOTFLOWMODEL extends APIRESPONSE
             }
 
             // Check if bot name already exists for another entry
-            $checkNameQuery = "SELECT COUNT(*) AS count FROM cmp_bot_trigger_type WHERE name = '{$data['name']}' AND id != '{$data['id']}'";
+            $checkNameQuery = "SELECT COUNT(*) AS count FROM cmp_bot_trigger_type WHERE name = '{$data['name']}' AND id != '{$data['id']}' AND vendor_id = (SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '{$loginData['user_id']}') AND status = 1";
             // print_r($checkNameQuery);exit;
             $result = $db->query($checkNameQuery);
             $count = $result->fetch_assoc()['count'];

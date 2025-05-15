@@ -1,39 +1,21 @@
 {
-    "object": "whatsapp_business_account",
     "entry": [
         {
             "id": "667307839582149",
+            "time": 1747235363,
             "changes": [
                 {
                     "value": {
-                        "messaging_product": "whatsapp",
-                        "metadata": {
-                            "display_phone_number": "15551571932",
-                            "phone_number_id": "637421792778479"
-                        },
-                        "statuses": [
-                            {
-                                "id": "wamid.HBgMOTE5MDI1NzE0NDQ1FQIAERgSM0JBODQzOUQ3MzNENEE1NkZFAA==",
-                                "status": "failed",
-                                "timestamp": "1746179346",
-                                "recipient_id": "919025714445",
-                                "errors": [
-                                    {
-                                        "code": 131047,
-                                        "title": "Re-engagement message",
-                                        "message": "Re-engagement message",
-                                        "error_data": {
-                                            "details": "Message failed to send because more than 24 hours have passed since the customer last replied to this number."
-                                        },
-                                        "href": "https:\/\/developers.facebook.com\/docs\/whatsapp\/cloud-api\/support\/error-codes\/"
-                                    }
-                                ]
-                            }
-                        ]
+                        "event": "PENDING_DELETION",
+                        "message_template_id": 3597420093884557,
+                        "message_template_name": "seasonal_promos",
+                        "message_template_language": "en_US",
+                        "reason": "NONE"
                     },
-                    "field": "messages"
+                    "field": "message_template_status_update"
                 }
             ]
         }
-    ]
+    ],
+    "object": "whatsapp_business_account"
 }

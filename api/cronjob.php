@@ -90,198 +90,201 @@ class CampaignScheduler
 
     public function run()
     {
+        $this->executeQueue();
+
 
         if (!file_exists($this->filePath)) {
             echo "📂 file.txt not found. Nothing to send.\n";
             return;
         }
         $this->checkAndSend();
-        $this->executeQueue();
     }
 
     private function checkAndSend()
     {
         $db = $this->dbConnect();
         $data = file_get_contents($this->filePath);
-// print_r(    $data);exit;
-        // Extract parts using regex
-        preg_match('/vendorId:\s*(\d+)/', $data, $matchvid);
-        preg_match('/CampaignID:\s*(\d+)/', $data, $matchCampaign);
-        preg_match('/Timezone:\s*([^\|]+)/', $data, $matchTimezone);
-        preg_match('/ScheduleAt:\s*([^\|]+)/', $data, $matchSchedule);
-        preg_match('/createdBy:\s*([^\|]+)/', $data, $matchcreatedBy);
-        preg_match('/Status:\s*(\w+)/', $data, $matchStatus);
-        // print_r($matchvid);exit;
-        $vid = isset($matchvid[1]) ? trim($matchvid[1]) : null;
-        $campaignId = isset($matchCampaign[1]) ? trim($matchCampaign[1]) : null;
-        $zoneName = isset($matchTimezone[1]) ? trim($matchTimezone[1]) : "Asia/Kolkata";
-        $scheduleAt = isset($matchSchedule[1]) ? trim($matchSchedule[1]) : null;
-        $createdBy = isset($matchcreatedBy[1]) ? trim($matchcreatedBy[1]) : null;
-        $status = isset($matchStatus[1]) ? trim($matchStatus[1]) : null;
-// print_r($createdBy);exit;
-        if (!$campaignId || !$zoneName || !$scheduleAt) {
-            echo "❌ Invalid data format in file.txt\n";
+
+        // ✅ Match each campaign block (single line ending in Status: ...)
+        preg_match_all('/CampaignID:\s*\d+\s*\|.*?Status:\s*\w+/m', $data, $campaignBlocks);
+
+        if (empty($campaignBlocks[0])) {
+            echo "📁 No campaigns found in file.txt\n";
             return;
         }
 
-        // ✅ Dynamically set the timezone
-        if (in_array($zoneName, timezone_identifiers_list())) {
-            date_default_timezone_set($zoneName);
-        } else {
-            echo "⚠️ Invalid timezone '$zoneName'. Falling back to Asia/Kolkata\n";
-            date_default_timezone_set("Asia/Kolkata");
-        }
+        foreach ($campaignBlocks[0] as $block) {
+            // 🔍 Extract campaign details
+            preg_match('/vendorId:\s*(\d+)/', $block, $matchvid);
+            preg_match('/CampaignID:\s*(\d+)/', $block, $matchCampaign);
+            preg_match('/Timezone:\s*([^\|]+)/', $block, $matchTimezone);
+            preg_match('/ScheduleAt:\s*([^\|]+)/', $block, $matchSchedule);
+            preg_match('/createdBy:\s*([^\|]+)/', $block, $matchcreatedBy);
+            preg_match('/Status:\s*(\w+)/', $block, $matchStatus);
 
-        // 🔍 Get timezone ID from DB
-        $timeZoneId = null;
-        $zoneQuery = "SELECT id FROM cmp_mst_timezone WHERE timezone_name = '$zoneName'";
-        $zoneResult = $db->query($zoneQuery);
-        if ($zoneResult && $zoneResult->num_rows > 0) {
-            $zoneRow = $zoneResult->fetch_assoc();
-            $timeZoneId = $zoneRow['id'];
-        } else {
-            echo "Zone '$zoneName' not found in cmp_mst_timezone. Using ID = 0\n";
+            $vid = isset($matchvid[1]) ? trim($matchvid[1]) : null;
+            $campaignId = isset($matchCampaign[1]) ? trim($matchCampaign[1]) : null;
+            $zoneName = isset($matchTimezone[1]) ? trim($matchTimezone[1]) : "Asia/Kolkata";
+            $scheduleAt = isset($matchSchedule[1]) ? trim($matchSchedule[1]) : null;
+            $createdBy = isset($matchcreatedBy[1]) ? trim($matchcreatedBy[1]) : null;
+            $status = isset($matchStatus[1]) ? trim($matchStatus[1]) : null;
+
+            if (!$campaignId || !$zoneName || !$scheduleAt) {
+                echo "❌ Skipping invalid campaign block\n";
+                continue;
+            }
+
+            // ✅ Set timezone
+            if (in_array($zoneName, timezone_identifiers_list())) {
+                date_default_timezone_set($zoneName);
+            } else {
+                echo "⚠️ Invalid timezone '$zoneName'. Falling back to Asia/Kolkata\n";
+                date_default_timezone_set("Asia/Kolkata");
+            }
+
+            // 🔍 Get timezone ID from DB
             $timeZoneId = 0;
-        }
+            $zoneQuery = "SELECT id FROM cmp_mst_timezone WHERE timezone_name = '$zoneName'";
+            $zoneResult = $db->query($zoneQuery);
+            if ($zoneResult && $zoneResult->num_rows > 0) {
+                $zoneRow = $zoneResult->fetch_assoc();
+                $timeZoneId = $zoneRow['id'];
+            }
 
-        // 🕒 Time check
-        $scheduleTime = strtotime($scheduleAt);
-        $currentTime = time();
-        $diff = $scheduleTime - $currentTime;
+            $scheduleTime = strtotime($scheduleAt);
+            $currentTime = time();
+            $diff = $scheduleTime - $currentTime;
 
-        if ($diff <= 240 && $diff >= 0) {
-            // ✉️ Send Message Logic
-            $query = "
-            SELECT t.template_id AS templateId,
-                   c.title,
-                   c.group_id, c.restrictLangCode,
-                   c.schedule_at AS scheduledAt,
-                   t.body_data,
-                   gc.group_name
-              FROM cmp_campaign c
-        JOIN cmp_whatsapp_templates t ON c.template_id = t.id       
-        JOIN cmp_group_contact gc ON c.group_id=gc.id
-        LEFT JOIN cmp_campaign_variable_mapping AS cvm ON c.id = cvm.campaign_id
-        WHERE c.id = $campaignId
-        ";
-            $result = $db->query($query);
-            if ($result && $result->num_rows > 0) {
-                $row = $result->fetch_assoc();
+            if ($diff <= 240 && $diff >= 0) {
+                // ✉️ Send Message Logic
+                $query = "SELECT DISTINCT
+                t.template_id AS templateId,
+                c.title,
+                c.group_id, c.restrictLangCode,
+                c.schedule_at AS scheduledAt,
+                t.body_data,
+                gc.group_name
+                FROM cmp_campaign c
+                JOIN cmp_whatsapp_templates t ON c.template_id = t.id       
+                JOIN cmp_group_contact gc ON c.group_id=gc.id
+                LEFT JOIN cmp_campaign_variable_mapping AS cvm ON c.id = cvm.campaign_id
+                WHERE c.id = $campaignId";
 
-                $templateId = $row['templateId'];
-                $bodyData = $row['body_data'];
-                $groupId = $row['group_id'];
-                $title = $row['title'];
-                $scheduledAt = $row['scheduledAt'];
-                $restrictLangCode = $row['restrictLangCode'];
-                $groupName = $row['group_name'];
-                $isRestricted = ($restrictLangCode == 1);
+                $result = $db->query($query);
+                if ($result && $result->num_rows > 0) {
+                    $row = $result->fetch_assoc();
+                    $templateId = $row['templateId'];
+                    $bodyData = $row['body_data'];
+                    $groupId = $row['group_id'];
+                    $title = $row['title'];
+                    $scheduledAt = $row['scheduledAt'];
+                    $restrictLangCode = $row['restrictLangCode'];
+                    $groupName = $row['group_name'];
+                    $isRestricted = ($restrictLangCode == 1);
 
-                // 🔍 Variable Mapping
-                $varQuery = "
-                SELECT 
-                    cvm.type, 
-                    cvm.variable_type_id AS varName, 
-                    cvm.variable_value AS varTypeId,
-                    mv.variable_name AS varTypeName 
-                FROM cmp_campaign_variable_mapping cvm
-                LEFT JOIN cmp_mst_variable mv ON cvm.variable_value = mv.id
-                WHERE cvm.campaign_id = $campaignId 
-                    AND cvm.template_id = $templateId 
-                    AND cvm.group_id = $groupId
-            ";
-                $varResult = $db->query($varQuery);
-                $variableMap = [];
-                if ($varResult && $varResult->num_rows > 0) {
-                    while ($varRow = $varResult->fetch_assoc()) {
-                        $type = $varRow['type'];
-                        $varName = $varRow['varName'];
-                        $varTypeId = $varRow['varTypeId'];
-                        $varTypeName = $varRow['varTypeName'];
+                    $varQuery = "
+                    SELECT 
+                        cvm.type, 
+                        cvm.variable_type_id AS varName, 
+                        cvm.variable_value AS varTypeId,
+                        mv.variable_name AS varTypeName 
+                    FROM cmp_campaign_variable_mapping cvm
+                    LEFT JOIN cmp_mst_variable mv ON cvm.variable_value = mv.id
+                    WHERE cvm.campaign_id = $campaignId 
+                    AND cvm.group_id = $groupId";
 
-                        if (!isset($variableMap[$type])) {
-                            $variableMap[$type] = [];
+                    $varResult = $db->query($varQuery);
+                    $variableMap = [];
+                    if ($varResult && $varResult->num_rows > 0) {
+                        while ($varRow = $varResult->fetch_assoc()) {
+                            $type = $varRow['type'];
+                            $varName = $varRow['varName'];
+                            $varTypeId = $varRow['varTypeId'];
+                            $varTypeName = $varRow['varTypeName'];
+
+                            if (!isset($variableMap[$type])) {
+                                $variableMap[$type] = [];
+                            }
+                            $variableMap[$type][] = [
+                                "varName" => $varName,
+                                "varValue" => [
+                                    "varTypeName" => $varTypeName,
+                                    "varTypeId" => $varTypeId
+                                ]
+                            ];
                         }
-                        $variableMap[$type][] = [
-                            "varName" => $varName,
-                            "varValue" => [
-                                "varTypeName" => $varTypeName,
-                                "varTypeId" => $varTypeId
-                            ]
+                    }
+
+                    $variableIds = [];
+                    foreach ($variableMap as $type => $variables) {
+                        $variableIds[] = [
+                            "type" => $type,
+                            "variables" => $variables
                         ];
                     }
-                }
 
-                $variableIds = [];
-                foreach ($variableMap as $type => $variables) {
-                    $variableIds[] = [
-                        "type" => $type,
-                        "variables" => $variables
+                    $dataToSend = [
+                        "templateId" => $templateId,
+                        "group" => [
+                            "groupId" => $groupId,
+                            "groupName" => $groupName
+                        ],
+                        "title" => $title,
+                        "restrictLangCode" => $isRestricted,
+                        "scheduleStatus" => true,
+                        "timezone" => [
+                            "id" => $timeZoneId,
+                            "zoneName" => $zoneName
+                        ],
+                        "scheduledAt" => $scheduledAt,
+                        "SendNum" => "",
+                        "variableIds" => $variableIds
                     ];
-                }
 
-                // 🧱 Build data
-                $dataToSend = [
-                    "templateId" => $templateId,
-                    "group" => [
-                        "groupId" => $groupId,
-                        "groupName" => $groupName
-                    ],
-                    "title" => $title,
-                    "restrictLangCode" => $isRestricted,
-                    "scheduleStatus" => true,
-                    "timezone" => [
-                        "id" => $timeZoneId,
-                        "zoneName" => $zoneName
-                    ],
-                    "scheduledAt" => $scheduledAt,
-                    "SendNum" => "",
-                    "variableIds" => $variableIds
-                ];
+                    $sendStatus = $this->sendMessage($dataToSend, $vid, $campaignId, $templateId, "campaign", $createdBy);
+                    echo "✅ Message processing for CampaignID $campaignId\n";
 
-                // ✅ Send the message
-                $sendStatus = $this->sendMessage($dataToSend, $vid,$campaignId, $templateId, "campaign",$createdBy);
-// print_r($sendStatus);exit;
-                if ($sendStatus['apiStatus']['code'] === '200') {
-                    // ✅ Update send_status to 'sent' in cmp_campaign
-                    $updateStatusSql = "UPDATE cmp_campaign SET send_status = 'Executed' WHERE id = '$campaignId'";
-                    if (!$db->query($updateStatusSql)) {
-                        echo "⚠️ Failed to update send_status in cmp_campaign: " . $db->error . "\n";
+                    if ($sendStatus['apiStatus']['code'] === '200') {
+                        $updateStatusSql = "UPDATE cmp_campaign SET send_status = 'Executed' WHERE id = '$campaignId'";
+                        if (!$db->query($updateStatusSql)) {
+                            echo "⚠️ Failed to update send_status for CampaignID $campaignId: " . $db->error . "\n";
+                        } else {
+                            echo "📌 send_status updated to 'Executed' for CampaignID $campaignId\n";
+                        }
+
+                        // 🧽 Remove line from file.txt
+                        $data = file($this->filePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+                        $newData = array_filter($data, function ($line) use ($campaignId) {
+                            return strpos($line, "CampaignID: $campaignId") === false;
+                        });
+                        file_put_contents($this->filePath, implode(PHP_EOL, $newData));
+                        echo "🧽 Cleaned CampaignID $campaignId from file.txt\n";
                     } else {
-                        echo "📌 send_status updated to 'sent' for campaign ID $campaignId\n";
+                        echo "❌ Failed to send message for CampaignID $campaignId\n";
                     }
-// print_r($updateStatusSql);exit;
-                    // Remove current block from file.txt
-                    $data = file_get_contents($this->filePath);
-                    $pattern = "/CampaignID:\s*{$campaignId}\s*\|.*?Status:\s*\w+\s*/s";
-                    $updatedData = preg_replace($pattern, '', $data);
-                    file_put_contents($this->filePath, trim($updatedData));
-
-                    echo "✅ Message sent successfully. CampaignID $campaignId removed from file.txt\n";
                 } else {
-                    echo "❌ Failed to send message for campaign ID $campaignId.\n";
+                    echo "❌ No campaign/template data found for CampaignID $campaignId\n";
                 }
+            } elseif ($diff < -240) {
+                echo "⌛ CampaignID $campaignId expired. Removing from file.\n";
+                $data = file($this->filePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+                $newData = array_filter($data, function ($line) use ($campaignId) {
+                    return strpos($line, "CampaignID: $campaignId") === false;
+                });
+                file_put_contents($this->filePath, implode(PHP_EOL, $newData));
             } else {
-                echo "❌ No campaign/template data found for ID $campaignId.\n";
+                echo "⏳ CampaignID $campaignId scheduled in $diff seconds. Not ready yet.\n";
             }
-            // } elseif ($diff < -240) {
-            // // } elseif ($diff < 0) {
-            //     // ⌛ Schedule expired
-            //     echo "⚠️ Scheduled time passed for CampaignID $campaignId. Removing from file.\n";
-            //     $data = file_get_contents($this->filePath);
-            //     $pattern = "/CampaignID:\s*{$campaignId}\s*\|.*?Status:\s*\w+\s*/s";
-            //     $updatedData = preg_replace($pattern, '', $data);
-            //     file_put_contents($this->filePath, trim($updatedData));
-        } else {
-            echo "🕒 Not time yet. ($diff seconds left)\n";
         }
     }
+
+
 
 
     private function getUsingCampCredentials($data, $vid)
     {
         try {
-// print_r($data);exit;
+            // print_r($data);exit;
             $groupID = $data['group']['groupId'];
             $db = $this->dbConnect();
             // Fetch group details with user-provided group name
@@ -446,6 +449,7 @@ class CampaignScheduler
     //new fast executequeue
     private function executeQueue()
     {
+        // echo "qqqq";
         $lock_file = 'whatsapp_cron.lock';
 
         // Step 1: Check if lock file exists and is recent (last 5 minutes)
@@ -463,14 +467,16 @@ class CampaignScheduler
             // ⚡ 1. Directly get top 80 queued messages PER vendor
             $messagesQuery = "SELECT * FROM (
                                 SELECT *,
-                                    ROW_NUMBER() OVER (PARTITION BY vendor_id ORDER BY created_date ASC) as row_num
+                                ROW_NUMBER() OVER (PARTITION BY vendor_id ORDER BY created_date ASC) as row_num
                                 FROM cmp_whatsapp_message_queue
-                                WHERE (message_status = 'queued' OR (message_status = 'failed' AND try_count < 3))
+                                WHERE 
+                                    (message_status = 'queued' OR (message_status = 'failed' AND try_count < 3)) 
+                                    AND campaign_schedule = 0
                             ) AS subquery
-                            WHERE row_num <= 80 AND campaign_schedule = 0
-                            ORDER BY vendor_id, created_date ASC
+                            WHERE row_num <= 80
+                            ORDER BY vendor_id, created_date ASC;
                         ";
-// print_r($messagesQuery);
+            // print_r($messagesQuery);
             $resultMessages = $db->query($messagesQuery);
 
             $messagesGroupedByVendor = [];
@@ -567,9 +573,10 @@ class CampaignScheduler
     }
 
 
-    public function sendMessage($data, $vid, $campaign_id,$templateId, $iscampaign, $createdBy)
+    public function sendMessage($data, $vid, $campaign_id, $templateId, $iscampaign, $createdBy)
     {
-        // print_r($data);exit;
+        // print_r($data);
+        // echo "come into the send message function";
         // print_r($vid);exit;
         // print_r($campaign_id);exit; 
         // print_r($templateId);exit;
@@ -593,14 +600,17 @@ class CampaignScheduler
 
             // Proceed to send immediately
             $fetchResponse = $this->getUsingCampCredentials($data, $vid);
-//             echo"12";
-// print_r($fetchResponse);exit;
+            // $testContact = $this->getTestContact($vid);
+            // print_r($testContact);exit;
+            echo "resposne outer from teh get the group function";
+            // print_r($fetchResponse);exit;
             if ($fetchResponse['apiStatus']['code'] != "200") {
                 return $fetchResponse;
             }
 
             $contacts = $fetchResponse['result']['contacts'];
             $template = $fetchResponse['result']['template'];
+            // $contacts[]['mobile'] = $testContact;
 
             $successRecipient = [];
             $failureRecipient = [];
@@ -622,7 +632,9 @@ class CampaignScheduler
                         'components' => $dynamicComponents,
                     ],
                 ];
-// print_r(    json_encode($body));exit;
+                // print_r(json_encode($body));exit;
+                // print_r(($body));exit;
+                // echo "cming after the body json encode";
                 $insertcampaign = "INSERT INTO cmp_campaign_contact(campaign_id, contact_id,created_by, created_date) VALUES('" . $campaign_id . "','" . $contact['contactId'] . "',$createdBy, NOW())";
                 // print_r(    $insertcampaign);exit;
                 $db = $this->dbConnect();
@@ -649,20 +661,48 @@ class CampaignScheduler
 
                 $response = curl_exec($curl);
                 $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+                $curlError = curl_error($curl);
                 curl_close($curl);
 
-                $responseArray[] = json_decode($response, true);
-
+                $responseArray = json_decode($response, true);
+                echo "final" . $response;
+                ///
                 if ($httpCode == 200) {
-                    $successRecipient[] = $contact['mobile'];
+                    $wamId = $responseArray['messages'][0]['id'];
+                    $messageStatus = 'sent';
+
+                    $update = "UPDATE cmp_whatsapp_message_queue
+                        SET message_status = '$messageStatus',
+                            wam_id = '$wamId',
+                            sent_at = NOW(),
+                            updated_date = NOW()
+                        WHERE campaign_id = '$campaign_id' AND phone_number = '" . $contact['mobile'] . "'
+                    ";
 
 
-
-
-
+                    //     $update = "INSERT INTO cmp_whatsapp_messages 
+                    //     (vendor_id, campaign_id, agent, agent_contact, wam_id, message_type, message_body, message_status)
+                    //     VALUES ('$vendorId', '$campaignId', 'bot', '$contactMobile', '$wamId', 'template', '" . json_encode($payload) . "', '$messageStatus')
+                    // ";
                 } else {
-                    $failureRecipient[] = $contact['mobile'];
+                    $errorMessage = mysqli_real_escape_string($db, $curlError ?: ($responseArray ? $responseArray['error']['error_data']['details'] : 'Unknown error'));
+                    $update = "UPDATE cmp_whatsapp_message_queue
+                        SET message_status = 'failed',
+                            try_count = try_count + 1,
+                            last_try_at = NOW(),
+                            error_message = '$errorMessage',
+                            updated_date = NOW()
+                        WHERE campaign_id = '$campaign_id' AND phone_number = '" . $contact['mobile'] . "'
+                    ";
                 }
+                $db->query($update);
+
+                ///
+                // if ($httpCode == 200) {
+                //     $successRecipient[] = $contact['mobile'];
+                // } else {
+                //     $failureRecipient[] = $contact['mobile'];
+                // }
             }
 
             return [
@@ -685,7 +725,22 @@ class CampaignScheduler
             ];
         }
     }
+    public function getTestContact($vendorId)
+    {
+        $db = $this->dbConnect();
+        $queryTestContact = "SELECT test_contact
+                     FROM cmp_vendor_fb_credentials
+                     WHERE vendor_id = '$vendorId'
+                     LIMIT 1";
 
+        $resultTestContact = $db->query($queryTestContact);
+        $testContact = null;
+
+        if ($resultTestContact && $row = $resultTestContact->fetch_assoc()) {
+            $testContact = $row['test_contact'];
+            return $testContact;
+        }
+    }
 
     /**
      * Prepare dynamic components based on the template and contact data

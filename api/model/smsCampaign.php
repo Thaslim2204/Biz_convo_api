@@ -30,6 +30,16 @@ class SMSCampaignMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] == "deactive") {
                     $result = $this->Smscampaigndeactive($data, $loginData);
                     return $result;
+                } elseif ($urlParam[1] === 'exporttoexcel') {
+                    if ($urlParam[2] === 'queue') {
+                        $result = $this->exportsmsQueuetoexcel($data, $loginData, $urlParam);
+                        return $result;
+                    } else if ($urlParam[2] === 'executed') {
+                        $result = $this->exportsmsQueuetoexcel($data, $loginData, $urlParam);
+                        return $result;
+                    } else {
+                        throw new Exception("Unable to proceed your request!");
+                    }
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -293,12 +303,12 @@ class SMSCampaignMODEL extends APIRESPONSE
             $db = $this->dbConnect();
             // Validate pageIndex and dataLength
             // Check if pageIndex and dataLength are not empty
-            if ($data['pageIndex'] === "") {
-                throw new Exception("PageIndex should not be empty!");
-            }
-            if ($data['dataLength'] == "") {
-                throw new Exception("dataLength should not be empty!");
-            }
+            // if ($data['pageIndex'] === "") {
+            //     throw new Exception("PageIndex should not be empty!");
+            // }
+            // if ($data['dataLength'] == "") {
+            //     throw new Exception("dataLength should not be empty!");
+            // }
 
             $start_index = $data['pageIndex'] * $data['dataLength'];
             $end_index = $data['dataLength'];
@@ -307,9 +317,9 @@ class SMSCampaignMODEL extends APIRESPONSE
             $fromDate = !empty($data['fromDate']) ? $db->real_escape_string($data['fromDate']) : null;
             $toDate = !empty($data['toDate']) ? $db->real_escape_string($data['toDate']) : null;
 
-            if (!$fromDate || !$toDate) {
-                throw new Exception("Please provide both fromDate and toDate.");
-            }
+            // if (!$fromDate || !$toDate) {
+            //     throw new Exception("Please provide both fromDate and toDate.");
+            // }
 
             $vendorId = $this->getVendorIdByUserId($loginData);
 
@@ -322,15 +332,24 @@ class SMSCampaignMODEL extends APIRESPONSE
                 SUM(message_status = 'queued') AS awaited
             FROM cmp_sms_messages
             WHERE vendor_id = '$vendorId'
-            AND DATE(created_date) BETWEEN '$fromDate' AND '$toDate'
-            GROUP BY DATE(created_date)
-            ORDER BY DATE(created_date) ASC
-            LIMIT $start_index, $end_index
+            
         ";
-        
+
+            if ($data['campaignId'] != "") {
+                $statusQuery .= " AND campaign_id = '" . $data['campaignId'] . "'";
+            }
+            if ($fromDate != "" && $toDate != "") {
+                $statusQuery .= " AND DATE(created_date) BETWEEN '$fromDate' AND '$toDate' 
+                GROUP BY DATE(created_date)
+                ORDER BY DATE(created_date) ASC";
+            }
+            if ($start_index && $end_index) {
+                $statusQuery .= " LIMIT $start_index, $end_index";
+            }
+
             // print_r($statusQuery);exit;
             $statusResult = $db->query($statusQuery);
-
+            $rowCount = $statusResult->num_rows;
             $smsCampaignDetails = [];
             $totalSubmitted = $totalDelivered = $totalFailed = $totalAwaited = 0;
 
@@ -356,21 +375,24 @@ class SMSCampaignMODEL extends APIRESPONSE
                 $totalFailed += $failedCount;
                 $totalAwaited += $awaitedCount;
             }
-
+            $responseArray = array(
+                "pageIndex" => $data['pageIndex'],
+                "dataLength" => $data['dataLength'],
+                "totalRecordCount" => $rowCount,
+                "totalSubmitedCount" => $totalSubmitted,
+                "totalDeliveredCount" => $totalDelivered,
+                "totalFailedCount" => $totalFailed,
+                "totalAwaitedCount" => $totalAwaited,
+            );
+            if (empty($data['campaignId'])) {
+                $responseArray['smsCampaignDetails'] = $smsCampaignDetails;
+            }
             return [
                 "apiStatus" => [
                     "code" => "200",
                     "message" => "Sms Campaign Report details fetched successfully"
                 ],
-                "result" => [
-                    "pageIndex" => $data['pageIndex'],
-                    "dataLength" => $data['dataLength'],
-                    "totalSubmitedCount" => $totalSubmitted,
-                    "totalDeliveredCount" => $totalDelivered,
-                    "totalFailedCount" => $totalFailed,
-                    "totalAwaitedCount" => $totalAwaited,
-                    "smsCampaignDetails" => $smsCampaignDetails
-                ]
+                "result" => $responseArray
             ];
         } catch (Exception $e) {
             return [
@@ -527,19 +549,19 @@ class SMSCampaignMODEL extends APIRESPONSE
                 ];
             }
             // //check the campaign title is already exist or not
-            // $title = mysqli_real_escape_string($db, $data['title']);
-            // $sql = "SELECT COUNT(*) as count FROM cmp_sms_campaign WHERE title = '$title' AND status = 1 ";
-            // $result = mysqli_query($db, $sql);
-            // $row = mysqli_fetch_assoc($result);
-            // if ($row['count'] > 0) {
-            //     $db->close();
-            //     return [
-            //         "apiStatus" => [
-            //             "code"    => "400",
-            //             "message" => "Campaign title already exists",
-            //         ],
-            //     ];
-            // }
+            $title = mysqli_real_escape_string($db, $data['title']);
+            $sql = "SELECT COUNT(*) as count FROM cmp_sms_campaign WHERE title = '$title' AND status = 1 ";
+            $result = mysqli_query($db, $sql);
+            $row = mysqli_fetch_assoc($result);
+            if ($row['count'] > 0) {
+                $db->close();
+                return [
+                    "apiStatus" => [
+                        "code"    => "400",
+                        "message" => "Campaign title already exists",
+                    ],
+                ];
+            }
 
             // Fetch Timezone details
             if (!empty($data['timezone']) && !empty($data['timezone'])) {
@@ -601,12 +623,14 @@ class SMSCampaignMODEL extends APIRESPONSE
             if (!empty($data['scheduleStatus']) && $data['scheduleStatus'] === true) {
                 // Proceed to send immediately
                 $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
+                $testContact = $this->getTestContact($vendor_id);
 
                 if ($fetchResponse['apiStatus']['code'] != "200") {
                     return $fetchResponse;
                 }
 
                 $contacts = $fetchResponse['result']['contacts'];
+                $contacts[]['mobile'] = $testContact;
 
 
                 //    print_r($contacts);exit;
@@ -638,12 +662,14 @@ class SMSCampaignMODEL extends APIRESPONSE
             if (empty($data['scheduleStatus']) || $data['scheduleStatus'] === false) {
 
                 $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
+                $testContact = $this->getTestContact($vendor_id);
 
                 if ($fetchResponse['apiStatus']['code'] != "200") {
                     return $fetchResponse;
                 }
 
                 $contacts = $fetchResponse['result']['contacts'];
+                // $contacts[]['mobile'] = $testContact;
 
                 // print_r($contacts);exit;
                 // Send WhatsApp Message
@@ -703,28 +729,56 @@ class SMSCampaignMODEL extends APIRESPONSE
         try {
             $groupID = $data['groupDetails']['groupId'];
             $db = $this->dbConnect();
+            $vendor_id = $this->getVendorIdByUserId($loginData);
             // Fetch group details with user-provided group name
             $queryService = "SELECT 
-            gc.id AS groupId,
-            gc.group_name AS groupName,
-            gc.active_status AS activeStatus,
-            c.id AS contactId,
-            c.first_name AS firstName,
-            c.last_name AS lastName,
-            c.mobile,
-            c.email,
-            c.country,
-            c.language_code
-        FROM cmp_group_contact_mapping AS gcm
-        LEFT JOIN cmp_group_contact AS gc ON gc.id = gcm.group_id
-        LEFT JOIN cmp_contact AS c ON c.id = gcm.contact_id
-        WHERE gc.status = 1 
-            AND gcm.status = 1
-            AND c.status = 1
-            AND gc.active_status = 1  
-            AND gc.id = $groupID 
-            AND gc.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
-        ORDER BY gc.id DESC";
+    gc.id AS groupId,
+    gc.group_name AS groupName,
+    gc.active_status AS activeStatus,
+    c.id AS contactId,
+    c.first_name AS firstName,
+    c.last_name AS lastName,
+    c.mobile,
+    c.email,
+    c.country,
+    c.language_code,
+    0 AS is_test_contact
+FROM cmp_group_contact_mapping AS gcm
+LEFT JOIN cmp_group_contact AS gc ON gc.id = gcm.group_id
+LEFT JOIN cmp_contact AS c ON c.id = gcm.contact_id
+WHERE gc.status = 1 
+    AND gcm.status = 1
+    AND c.status = 1
+    AND gc.active_status = 1  
+    AND gc.vendor_id = $vendor_id
+    AND gc.id = $groupID
+GROUP BY c.mobile
+
+UNION
+
+SELECT 
+    $groupID AS groupId,
+    (SELECT group_name FROM cmp_group_contact WHERE id = $groupID) AS groupName,
+    (SELECT active_status FROM cmp_group_contact WHERE id = $groupID) AS activeStatus,
+    c.id AS contactId,
+    c.first_name AS firstName,
+    c.last_name AS lastName,
+    c.mobile,
+    c.email,
+    c.country,
+    c.language_code,
+    1 AS is_test_contact
+FROM cmp_contact c
+WHERE RIGHT(c.mobile, 10) IN (
+    SELECT RIGHT(test_contact, 10) FROM cmp_vendor_sms_credentials WHERE vendor_id = $vendor_id
+)
+AND c.status = 1 AND vendor_id = $vendor_id
+AND NOT EXISTS (
+    SELECT 1 FROM cmp_group_contact_mapping gcm WHERE gcm.contact_id = c.id AND gcm.group_id = $groupID
+)
+GROUP BY c.mobile
+ORDER BY groupId DESC, contactId ASC;
+";
             // print_r($queryService);exit;
             $result = $db->query($queryService);
             $rowCount = mysqli_num_rows($result);
@@ -814,7 +868,8 @@ class SMSCampaignMODEL extends APIRESPONSE
                     "tempalte_language" => $row['language'],
                     "scheduleAt" => $row['schedule_at'],
                     "sendStatus" => $row['send_status'],
-                    "status" => $row['campaignStatus']
+                    "status" => $row['campaignStatus'],
+                    "createdDate" => $row['created_date'],
                 ];
 
                 $campaignContactList = [];
@@ -956,9 +1011,9 @@ class SMSCampaignMODEL extends APIRESPONSE
                 $message = "executed";
             }
             if ($data['filterBy']) {
-                $query .= " AND wmq.mobile LIKE '%" . mysqli_real_escape_string($db, $data['filterBy']) . "%' or c.first_name LIKE '%" . mysqli_real_escape_string($db, $data['filterBy']) . "%' 
+                $query .= " AND (wmq.mobile LIKE '%" . mysqli_real_escape_string($db, $data['filterBy']) . "%' or c.first_name LIKE '%" . mysqli_real_escape_string($db, $data['filterBy']) . "%' 
                             or wmq.message_status LIKE '%" . mysqli_real_escape_string($db, $data['filterBy']) . "%' 
-                            or c.last_name LIKE '%" . mysqli_real_escape_string($db, $data['filterBy']) . "%'
+                            or c.last_name LIKE '%" . mysqli_real_escape_string($db, $data['filterBy']) . "%')
                             ";
             }
             $query .= " ORDER BY wmq.created_date DESC";
@@ -1014,6 +1069,23 @@ class SMSCampaignMODEL extends APIRESPONSE
                 "result" => "401",
                 "message" => $e->getMessage(),
             );
+        }
+    }
+
+    public function getTestContact($vendorId)
+    {
+        $db = $this->dbConnect();
+        $queryTestContact = "SELECT test_contact
+                     FROM cmp_vendor_fb_credentials
+                     WHERE vendor_id = '$vendorId'
+                     LIMIT 1";
+
+        $resultTestContact = $db->query($queryTestContact);
+        $testContact = null;
+
+        if ($resultTestContact && $row = $resultTestContact->fetch_assoc()) {
+            $testContact = $row['test_contact'];
+            return $testContact;
         }
     }
 
@@ -1170,6 +1242,124 @@ class SMSCampaignMODEL extends APIRESPONSE
             throw new Exception($e->getMessage());
         }
     }
+
+    public function exportsmsQueuetoexcel($data, $loginData, $urlParam)
+    {
+        try {
+            // print_r($data);exit;
+            // Check if loginData exists and contains user_id
+            if (!isset($loginData['user_id'])) {
+                return [
+                    "apiStatus" => [
+                        "code" => "400",
+                        "message" => "Missing user_id in loginData."
+                    ]
+                ];
+            }
+
+            $db = $this->dbConnect();
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+
+            // Set column headers
+            $headers = ['S.No', 'First Name', 'Last Name', 'Mobile Number', 'Template Name', 'Message Status', 'Updated Date', 'Reason'];
+            $column = 'A';
+            foreach ($headers as $header) {
+                $sheet->setCellValue($column . '1', $header);
+                $sheet->getStyle($column . '1')->getFont()->setBold(true);
+                $sheet->getStyle($column . '1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getColumnDimension($column)->setAutoSize(true);
+                $column++;
+            }
+
+            // Fetch staff details
+            $campaign_id = $data[3];
+            if (empty($campaign_id)) {
+                return [
+                    "apiStatus" => [
+                        "code" => "400",
+                        "message" => "Campaign ID is required."
+                    ]
+                ];
+            }
+            // Fetch queue data for the given campaign
+            $query = "SELECT wmq.id, c.first_name, c.last_name, wmq.mobile, wmq.template_name, wmq.message_status, wmq.updated_date, wmq.reason
+                        FROM cmp_sms_messages AS wmq
+                        LEFT JOIN cmp_contact AS c ON c.mobile = wmq.mobile AND c.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
+                        WHERE wmq.campaign_id = '$campaign_id' AND wmq.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
+                        ";
+            if ($urlParam[2] === 'queue') {
+                $query .= " AND wmq.message_status = 'queued'";
+                $message = "queue";
+            } else if ($urlParam[2] === 'executed') {
+                $query .= " AND wmq.message_status != 'queued'";
+                $message = "executed";
+            }
+
+            $query .= " ORDER BY wmq.created_date ASC";
+            // print_r($query);exit;
+
+            $result = $db->query($query);
+
+            if ($result->num_rows === 0) {
+                return [
+                    "apiStatus" => [
+                        "code" => "204",
+                        "message" => "No data found."
+                    ]
+                ];
+            }
+
+            $rowIndex = 2;
+            $sno = 1;
+            while ($row = $result->fetch_assoc()) {
+                // print_r($row);
+                if ($row['message_status'] == 'queued') {
+                    $messageStatus = 'Queued';
+                } else if ($row['message_status'] == 'sent') {
+                    $messageStatus = 'Sent';
+                } else if ($row['message_status'] == 'failed') {
+                    $messageStatus = 'Failed';
+                } else if ($row['message_status'] == 'delivered') {
+                    $messageStatus = 'Delivered';
+                } else if ($row['message_status'] == 'undelivered') {
+                    $messageStatus = 'Failed';
+                } else if ($row['message_status'] == 'expired') {
+                    $messageStatus = 'Failed';
+                }
+
+                $sheet->setCellValue('A' . $rowIndex, $sno);
+                $sheet->setCellValue('B' . $rowIndex, $row['first_name']);
+                $sheet->setCellValue('C' . $rowIndex, $row['last_name']);
+                // $sheet->setCellValue('D' . $rowIndex, $row['mobile']);
+                $sheet->setCellValueExplicit('D' . $rowIndex, $row['mobile'], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValue('E' . $rowIndex, $row['template_name']);
+                $sheet->setCellValue('F' . $rowIndex, $messageStatus);
+                $sheet->setCellValue('G' . $rowIndex, $row['updated_date']);
+                $sheet->setCellValue('H' . $rowIndex, $row['reason']);
+                $rowIndex++;
+                $sno++;
+            }
+
+            // **Output the file directly for download**
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="SMS_' . $message . '_data_' . date('Ymd_His') . '.xlsx"');
+            header('Cache-Control: max-age=0');
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output'); // Send file to browser directly
+
+            exit;
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "500",
+                    "message" => $e->getMessage()
+                ]
+            ];
+        }
+    }
+
     // public function campaigndeactiveachieve($data, $loginData)
     // {
     //     try {

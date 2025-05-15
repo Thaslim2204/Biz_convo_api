@@ -1,3 +1,0 @@
-SmsCampaignID: 21 | vendorId: 3 | Timezone: Asia/Kolkata | ScheduleAt: 2025-05-09 13:05:00 |createdBy: 11| Status: Scheduled
-SmsCampaignID: 22 | vendorId: 3 | Timezone: Asia/Kolkata | ScheduleAt: 2025-05-09 13:16:00 |createdBy: 11| Status: Scheduled
-SmsCampaignID: 41 | vendorId: 3 | Timezone: Asia/Kolkata | ScheduleAt: 2025-05-09 18:00:00 |createdBy: 11| Status: Scheduled

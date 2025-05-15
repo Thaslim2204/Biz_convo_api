@@ -57,91 +57,92 @@ class SmsCampaignScheduler
             echo "📂 Smsfile.txt not found. Nothing to send.\n";
             return;
         }
-        // $this->checkAndSend();
+        $this->checkAndSend();
     }
 
     private function checkAndSend()
     {
-        // echo"123654789";exit;
         $db = $this->dbConnect();
         $data = file_get_contents($this->filePath);
-        // print_r(    $data);exit;
-        // Extract parts using regex
-        preg_match('/vendorId:\s*(\d+)/', $data, $matchvid);
-        preg_match('/SmsCampaignID:\s*(\d+)/', $data, $matchCampaign);
-        preg_match('/Timezone:\s*([^\|]+)/', $data, $matchTimezone);
-        preg_match('/ScheduleAt:\s*([^\|]+)/', $data, $matchSchedule);
-        preg_match('/createdBy:\s*([^\|]+)/', $data, $matchcreatedBy);
-        preg_match('/Status:\s*(\w+)/', $data, $matchStatus);
-        // print_r($matchvid);exit;
-        $vid = isset($matchvid[1]) ? trim($matchvid[1]) : null;
-        $campaignId = isset($matchCampaign[1]) ? trim($matchCampaign[1]) : null;
-        $zoneName = isset($matchTimezone[1]) ? trim($matchTimezone[1]) : "Asia/Kolkata";
-        $scheduleAt = isset($matchSchedule[1]) ? trim($matchSchedule[1]) : null;
-        $createdBy = isset($matchcreatedBy[1]) ? trim($matchcreatedBy[1]) : null;
-        $status = isset($matchStatus[1]) ? trim($matchStatus[1]) : null;
-        // print_r($createdBy);exit;
-        if (!$campaignId || !$zoneName || !$scheduleAt) {
-            echo "❌ Invalid data format in file.txt\n";
+
+        // Extract all campaign blocks (multiple lines) using preg_match_all
+        preg_match_all('/SmsCampaignID:\s*\d+\s*\|.*?Status:\s*\w+/m', $data, $campaignBlocks);
+
+        if (empty($campaignBlocks[0])) {
+            echo "📁 No SMS campaigns found in smsfile.txt\n";
             return;
         }
 
-        // ✅ Dynamically set the timezone
-        if (in_array($zoneName, timezone_identifiers_list())) {
-            date_default_timezone_set($zoneName);
-        } else {
-            echo "⚠️ Invalid timezone '$zoneName'. Falling back to Asia/Kolkata\n";
-            date_default_timezone_set("Asia/Kolkata");
-        }
+        foreach ($campaignBlocks[0] as $block) {
+            // Extract details for each campaign
+            preg_match('/vendorId:\s*(\d+)/', $block, $matchvid);
+            preg_match('/SmsCampaignID:\s*(\d+)/', $block, $matchCampaign);
+            preg_match('/Timezone:\s*([^\|]+)/', $block, $matchTimezone);
+            preg_match('/ScheduleAt:\s*([^\|]+)/', $block, $matchSchedule);
+            preg_match('/createdBy:\s*([^\|]+)/', $block, $matchcreatedBy);
+            preg_match('/Status:\s*(\w+)/', $block, $matchStatus);
 
-        // 🔍 Get timezone ID from DB
-        $timeZoneId = null;
-        $zoneQuery = "SELECT id FROM cmp_mst_timezone WHERE timezone_name = '$zoneName'";
-        $zoneResult = $db->query($zoneQuery);
-        if ($zoneResult && $zoneResult->num_rows > 0) {
-            $zoneRow = $zoneResult->fetch_assoc();
-            $timeZoneId = $zoneRow['id'];
-        } else {
-            echo "Zone '$zoneName' not found in cmp_mst_timezone. Using ID = 0\n";
+            $vid = isset($matchvid[1]) ? trim($matchvid[1]) : null;
+            $campaignId = isset($matchCampaign[1]) ? trim($matchCampaign[1]) : null;
+            $zoneName = isset($matchTimezone[1]) ? trim($matchTimezone[1]) : "Asia/Kolkata";
+            $scheduleAt = isset($matchSchedule[1]) ? trim($matchSchedule[1]) : null;
+            $createdBy = isset($matchcreatedBy[1]) ? trim($matchcreatedBy[1]) : null;
+            $status = isset($matchStatus[1]) ? trim($matchStatus[1]) : null;
+
+            if (!$campaignId || !$zoneName || !$scheduleAt) {
+                echo "❌ Skipping invalid SMS campaign block\n";
+                continue;
+            }
+
+            // Set timezone dynamically
+            if (in_array($zoneName, timezone_identifiers_list())) {
+                date_default_timezone_set($zoneName);
+            } else {
+                echo "⚠️ Invalid timezone '$zoneName'. Falling back to Asia/Kolkata\n";
+                date_default_timezone_set("Asia/Kolkata");
+            }
+
+            // Get timezone ID from DB
             $timeZoneId = 0;
-        }
+            $zoneQuery = "SELECT id FROM cmp_mst_timezone WHERE timezone_name = '$zoneName'";
+            $zoneResult = $db->query($zoneQuery);
+            if ($zoneResult && $zoneResult->num_rows > 0) {
+                $zoneRow = $zoneResult->fetch_assoc();
+                $timeZoneId = $zoneRow['id'];
+            }
 
-        // 🕒 Time check
-        $scheduleTime = strtotime($scheduleAt);
-        $currentTime = time();
-        $diff = $scheduleTime - $currentTime;
-        // print_r($diff);exit;
-        if ($diff <= 240 && $diff >= 0) {
-            // ✉️ Send Message Logic
-            $query = "
+            $scheduleTime = strtotime($scheduleAt);
+            $currentTime = time();
+            $diff = $scheduleTime - $currentTime;
+
+            if ($diff <= 240 && $diff >= 0) {
+                // Send SMS message logic here (same as your existing logic)
+                $query = "
             SELECT t.template_id AS templateId,
                    c.title,
-                   c.group_id, c.restrictLangCode,
+                   c.group_id,
                    c.schedule_at AS scheduledAt,
                    t.template_content,
                    gc.group_name
-              FROM cmp_campaign c
-        JOIN cmp_sms_templates t ON c.template_id = t.id       
-        JOIN cmp_group_contact gc ON c.group_id=gc.id
-        LEFT JOIN cmp_campaign_variable_mapping AS cvm ON c.id = cvm.campaign_id
-        WHERE c.id = $campaignId
-        ";
-            // print_r($query);exit;
-            $result = $db->query($query);
-            if ($result && $result->num_rows > 0) {
-                $row = $result->fetch_assoc();
+              FROM cmp_sms_campaign c
+              JOIN cmp_sms_templates t ON c.template_id = t.id       
+              JOIN cmp_group_contact gc ON c.group_id=gc.id
+              WHERE c.id = $campaignId
+            ";
 
-                $templateId = $row['templateId'];
-                $bodyData = $row['template_content'];
-                $groupId = $row['group_id'];
-                $title = $row['title'];
-                $scheduledAt = $row['scheduledAt'];
-                $restrictLangCode = $row['restrictLangCode'];
-                $groupName = $row['group_name'];
-                $isRestricted = ($restrictLangCode == 1);
+                $result = $db->query($query);
+                if ($result && $result->num_rows > 0) {
+                    $row = $result->fetch_assoc();
 
-                // 🔍 Variable Mapping
-                $varQuery = "
+                    $templateId = $row['templateId'];
+                    $bodyData = $row['template_content'];
+                    $groupId = $row['group_id'];
+                    $title = $row['title'];
+                    $scheduledAt = $row['scheduledAt'];
+                    $groupName = $row['group_name'];
+
+                    // Variable mapping
+                    $varQuery = "
                 SELECT 
                     cvm.type, 
                     cvm.variable_type_id AS varName, 
@@ -150,101 +151,100 @@ class SmsCampaignScheduler
                 FROM cmp_sms_campaign_variable_mapping cvm
                 LEFT JOIN cmp_mst_variable mv ON cvm.variable_value = mv.id
                 WHERE cvm.campaign_id = $campaignId 
-                    AND cvm.template_id = $templateId 
-                    AND cvm.group_id = $groupId
-            ";
-                $varResult = $db->query($varQuery);
-                $variableMap = [];
-                if ($varResult && $varResult->num_rows > 0) {
-                    while ($varRow = $varResult->fetch_assoc()) {
-                        $type = $varRow['type'];
-                        $varName = $varRow['varName'];
-                        $varTypeId = $varRow['varTypeId'];
-                        $varTypeName = $varRow['varTypeName'];
+                AND cvm.group_id = $groupId
+                ";
+                    $varResult = $db->query($varQuery);
+                    $variableMap = [];
+                    if ($varResult && $varResult->num_rows > 0) {
+                        while ($varRow = $varResult->fetch_assoc()) {
+                            $type = $varRow['type'];
+                            $varName = $varRow['varName'];
+                            $varTypeId = $varRow['varTypeId'];
+                            $varTypeName = $varRow['varTypeName'];
 
-                        if (!isset($variableMap[$type])) {
-                            $variableMap[$type] = [];
+                            if (!isset($variableMap[$type])) {
+                                $variableMap[$type] = [];
+                            }
+                            $variableMap[$type][] = [
+                                "varName" => $varName,
+                                "varValue" => [
+                                    "varTypeName" => $varTypeName,
+                                    "varTypeId" => $varTypeId
+                                ]
+                            ];
                         }
-                        $variableMap[$type][] = [
-                            "varName" => $varName,
-                            "varValue" => [
-                                "varTypeName" => $varTypeName,
-                                "varTypeId" => $varTypeId
-                            ]
+                    }
+
+                    $variableIds = [];
+                    foreach ($variableMap as $type => $variables) {
+                        $variableIds[] = [
+                            "type" => $type,
+                            "variables" => $variables
                         ];
                     }
-                }
 
-                $variableIds = [];
-                foreach ($variableMap as $type => $variables) {
-                    $variableIds[] = [
-                        "type" => $type,
-                        "variables" => $variables
+                    $dataToSend = [
+                        "templateId" => $templateId,
+                        "group" => [
+                            "groupId" => $groupId,
+                            "groupName" => $groupName
+                        ],
+                        "title" => $title,
+                        "body" => $bodyData,
+                        "scheduleStatus" => true,
+                        "timezone" => [
+                            "id" => $timeZoneId,
+                            "zoneName" => $zoneName
+                        ],
+                        "scheduledAt" => $scheduledAt,
+                        "SendNum" => "",
+                        "variableIds" => $variableIds
                     ];
-                }
 
-                // 🧱 Build data
-                $dataToSend = [
-                    "templateId" => $templateId,
-                    "group" => [
-                        "groupId" => $groupId,
-                        "groupName" => $groupName
-                    ],
-                    "title" => $title,
-                    "body" => $bodyData,
-                    "restrictLangCode" => $isRestricted,
-                    "scheduleStatus" => true,
-                    "timezone" => [
-                        "id" => $timeZoneId,
-                        "zoneName" => $zoneName
-                    ],
-                    "scheduledAt" => $scheduledAt,
-                    "SendNum" => "",
-                    "variableIds" => $variableIds
-                ];
-                $fetchResponse = $this->getUsingCampCredentials($dataToSend, $vid);
-                
-                if ($fetchResponse['apiStatus']['code'] != "200") {
-                    return $fetchResponse;
-                }
-    
-                $contacts = $fetchResponse['result']['contacts'];
-                // ✅ Send the message
-                $sendStatus = $this->sendMessagee($dataToSend, $vid, $campaignId, $bodyData, $templateId,$contacts);
-                // print_r($sendStatus);exit;
-                if ($sendStatus['apiStatus']['code'] === '200') {
-                    // ✅ Update send_status to 'sent' in cmp_campaign
-                    $updateStatusSql = "UPDATE cmp_campaign SET send_status = 'Executed' WHERE id = '$campaignId'";
-                    if (!$db->query($updateStatusSql)) {
-                        echo "⚠️ Failed to update send_status in cmp_campaign: " . $db->error . "\n";
-                    } else {
-                        echo "📌 send_status updated to 'sent' for campaign ID $campaignId\n";
+                    $fetchResponse = $this->getUsingCampCredentials($dataToSend, $vid);
+                    if ($fetchResponse['apiStatus']['code'] != "200") {
+                        echo "❌ Failed to fetch contacts for SMS campaign ID $campaignId\n";
+                        continue;
                     }
-                    // print_r($updateStatusSql);exit;
-                    // Remove current block from file.txt
-                    $data = file_get_contents($this->filePath);
-                    $pattern = "/SmsCampaignID:\s*{$campaignId}\s*\|.*?Status:\s*\w+\s*/s";
-                    $updatedData = preg_replace($pattern, '', $data);
-                    file_put_contents($this->filePath, trim($updatedData));
 
-                    echo "✅ Message sent successfully. CampaignID $campaignId removed from file.txt\n";
+                    $contacts = $fetchResponse['result']['contacts'];
+                    $sendStatus = $this->sendMessagee($dataToSend, $vid, $campaignId, $bodyData, $templateId, $contacts);
+
+                    if ($sendStatus['apiStatus']['code'] === '200') {
+                        // Update campaign send_status
+                        $updateStatusSql = "UPDATE cmp_sms_campaign SET send_status = 'Executed' WHERE id = '$campaignId'";
+                        if (!$db->query($updateStatusSql)) {
+                            echo "⚠️ Failed to update send_status for SMS campaign ID $campaignId: " . $db->error . "\n";
+                        } else {
+                            echo "📌 send_status updated to 'Executed' for SMS campaign ID $campaignId\n";
+                        }
+
+                        // Remove campaign block from file
+                        $fileData = file_get_contents($this->filePath);
+                        $pattern = "/SmsCampaignID:\s*{$campaignId}\s*\|.*?Status:\s*\w+\s*/s";
+                        $updatedData = preg_replace($pattern, '', $fileData);
+                        file_put_contents($this->filePath, trim($updatedData));
+
+                        echo "✅ SMS campaign ID $campaignId sent and removed from file\n";
+                    } else {
+                        echo "❌ Failed to send SMS for campaign ID $campaignId\n";
+                    }
                 } else {
-                    echo "❌ Failed to send message for campaign ID $campaignId.\n";
+                    echo "❌ No SMS campaign/template data found for campaign ID $campaignId\n";
                 }
-            } else {
-                echo "❌ No campaign/template data found for ID $campaignId.\n";
-            }
             } elseif ($diff < -240) {
-                // ⌛ Schedule expired
-                echo "⚠️ Scheduled time passed for CampaignID $campaignId. Removing from file.\n";
-                $data = file_get_contents($this->filePath);
+                // Remove expired campaigns from file
+                echo "⌛ SMS campaign ID $campaignId expired. Removing from file.\n";
+                $fileData = file_get_contents($this->filePath);
                 $pattern = "/SmsCampaignID:\s*{$campaignId}\s*\|.*?Status:\s*\w+\s*/s";
-                $updatedData = preg_replace($pattern, '', $data);
+                $updatedData = preg_replace($pattern, '', $fileData);
                 file_put_contents($this->filePath, trim($updatedData));
-        } else {
-            echo "🕒 Not time yet. ($diff seconds left)\n";
+            } else {
+                echo "⏳ SMS campaign ID $campaignId scheduled in $diff seconds. Not ready yet.\n";
+            }
         }
     }
+
 
 
     private function getUsingCampCredentials($data, $vid)
@@ -282,7 +282,7 @@ class SmsCampaignScheduler
                 while ($row = mysqli_fetch_assoc($result)) {
                     $contacts[] = $row;
                 }
-// print_r($contacts);exit;
+                // print_r($contacts);exit;
                 // // Fetch the template dynamically
                 // $template_id = $data['templateId'];
                 // // $templateResponse = $this->templateByID(["", "", $template_id], $vid);
@@ -318,19 +318,19 @@ class SmsCampaignScheduler
     private function executeUpdateMsgStatus()
     {
         $lock_file = 'sms_cron.lock';
- 
+
         // Step 1: Check if lock file exists and is recent (last 5 minutes)
         if (file_exists($lock_file)) {
             echo "Another execution is already running. Exiting...\n";
             return;
         }
- 
+
         // Step 2: Create/refresh the lock file
         touch($lock_file);
- 
+
         try {
             $db = $this->dbConnect();
- 
+
             // ⚡ 1. Directly get top 80 queued messages PER vendor
             $messagesQuery = "SELECT * FROM (
                                 SELECT *,
@@ -343,22 +343,22 @@ class SmsCampaignScheduler
                         ";
             // print_r($messagesQuery);exit;
             $resultMessages = $db->query($messagesQuery);
- 
+
             $messagesGroupedByVendor = [];
- 
+
             while ($row = mysqli_fetch_assoc($resultMessages)) {
                 $messagesGroupedByVendor[$row['vendor_id']][] = $row;
             }
             // print_r($messagesGroupedByVendor[$row['vendor_id']][]);exit;
- 
+
             // 🔥 2. Now process messages group by vendor
             foreach ($messagesGroupedByVendor as $vendorId => $allMessages) {
- 
+
                 echo "Processing Vendor: " . $vendorId . " at " . date("Y-m-d H:i:s") . "\n";
- 
+
                 // Set Facebook credentials
                 $this->smsCredentials($vendorId);
- 
+
                 foreach ($allMessages as $message) {
                     $messageId = $message['msg_id'];
                     $vendorID = $message['vendor_id'];
@@ -381,7 +381,7 @@ class SmsCampaignScheduler
     }
 
 
-    public function sendMessagee($data, $vid, $campaignid, $msgContent, $templateId,$contacts)
+    public function sendMessagee($data, $vid, $campaignid, $msgContent, $templateId, $contacts)
     {
         // echo"12366555";
         // print_r(json_encode($contacts));exit;
@@ -389,7 +389,7 @@ class SmsCampaignScheduler
         try {
             $db = $this->dbConnect();
             $this->smsCredentials($vid);
-            $url = "$this->sms_base_url/jsmslist3";
+            $url = "$this->sms_base_url/jsmslist";
             // $msgContent = "Cheers To Celebrate Diwali @DENCH UNION! Get Rs.500 OFF on Rs.3999/- & Rs.1000 OFF on Rs.6999/-. Shop for Luxury European Brands!! Visit Now!! Call: 9677917733";
             // $contacts = ["824841580678", "824841580678"];
             // $templateId = "1707172857624499901";
@@ -481,37 +481,36 @@ class SmsCampaignScheduler
     }
 
 
-    public function storeMsgId($response, $vid, $templateId, $senderId, $db, $campaignid )
+    public function storeMsgId($response, $vid, $templateId, $senderId, $db, $campaignid)
     {
 
         try {
             //get vendor id using logindata
             $db = $this->dbConnect();
             // Get the Contact id from the login data
-            
-                $vendor_id = $vid;
-           
+
+            $vendor_id = $vid;
+
 
             foreach ($response as $res) {
                 // print_r((json_encode($res)));
 
                 if (isset($res['mobileno'])) {
                     $messageId = isset($res['messageid']) ? $res['messageid'] : null;
-                    if($res['status'] == "success"){
+                    if ($res['status'] == "success") {
                         $msgStatus = "sent";
-                    }else if($res['status'] == "fail"){
+                    } else if ($res['status'] == "fail") {
                         $msgStatus = "failed";
                     }
                     // $sql = "INSERT into cmp_sms_messages (campaign_id,template_id,sender_id,mobile,vendor_id,msg_id, reason, message_status, created_by) 
                     // values ('$campaignid','$templateId','$senderId','" . $res['mobileno'] . "','$vendor_id','" . $messageId . "','" . $res['reason'] . "','" . $res['status'] . "','" . $loginData['user_id'] . "')";
                     $updatedDate = date('Y-m-d H:i:s');
-                    $updatedSql="UPDATE cmp_sms_messages set message_status = '" . $msgStatus . "', updated_date = '" . $updatedDate . "',msg_id = '" . $messageId . "'  where  mobile = '" . $res['mobileno'] . "' and vendor_id = '$vendor_id' AND campaign_id = '$campaignid'";
+                    $updatedSql = "UPDATE cmp_sms_messages set message_status = '" . $msgStatus . "', updated_date = '" . $updatedDate . "',msg_id = '" . $messageId . "'  where  mobile = '" . $res['mobileno'] . "' and vendor_id = '$vendor_id' AND campaign_id = '$campaignid'";
                     $result = $db->query($updatedSql);
                     // $report = $this->singleReport($messageId, $vid);
                     if (!$result) {
                         throw new Exception("Unable to store sms informations!");
                     }
-                    
                 }
             }
         } catch (Exception $e) {
@@ -585,9 +584,13 @@ class SmsCampaignScheduler
             // print_r($updatedDate);
             // exit;
             if ($msgStatus == 'DELIVRD') {
-                $msgStatus = "Delivered";
+                $msgStatus = "delivered";
             } else if ($msgStatus == 'REJECTD') {
-                $msgStatus = "Rejected";
+                $msgStatus = "rejected";
+            } else if ($msgStatus == 'EXPIRED') {
+                $msgStatus = "expired";
+            } else if ($msgStatus == 'UNDELIVRD') {
+                $msgStatus = "undelivered";
             }
             // echo $msgStatus;exit;
             //update message status using message id
@@ -634,9 +637,6 @@ class SmsCampaignScheduler
                 return '';
         }
     }
-
-
-   
 }
 
 // Run the scheduler

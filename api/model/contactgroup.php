@@ -200,19 +200,19 @@ class GROUPMODEL extends APIRESPONSE
             $responseArray = []; // Initialize response variable
             $db = $this->dbConnect();
 
-            // if ($data['pageIndex'] === "") {
-            //     throw new Exception("PageIndex should not be empty!");
-            // }
-            // if ($data['dataLength'] == "") {
-            //     throw new Exception("dataLength should not be empty!");
-            // }
+            if ($data['pageIndex'] === "") {
+                throw new Exception("PageIndex should not be empty!");
+            }
+            if ($data['dataLength'] == "") {
+                throw new Exception("dataLength should not be empty!");
+            }
             if (empty($data['groupName'])) {
                 throw new Exception("groupName should not be empty!");
             }
 
             $groupName = $db->real_escape_string($data['groupName']);
-            // $start_index = $data['pageIndex'] * $data['dataLength'];
-            // $end_index = $data['dataLength'];
+            $start_index = $data['pageIndex'] * $data['dataLength'];
+            $end_index = $data['dataLength'];
             // Get total record count
             $countQuery = "SELECT COUNT(*) AS totalCount FROM cmp_group_contact_mapping AS gcm
         LEFT JOIN cmp_group_contact AS gc ON gc.id = gcm.group_id
@@ -259,11 +259,11 @@ class GROUPMODEL extends APIRESPONSE
             AND gc.active_status = 1  
             AND gc.group_name = '$groupName' 
             AND gc.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
-        ORDER BY gc.id DESC 
+        ORDER BY gc.id DESC LIMIT $start_index, $end_index
    
         ";
             // print_r($queryService);exit;
-            //      LIMIT $start_index, $end_index
+                 
 
             $result = $db->query($queryService);
             $groupData = [];
@@ -1262,8 +1262,8 @@ class GROUPMODEL extends APIRESPONSE
             $userId = $loginData['user_id'];
 
             // Query to get Group details based on user_id -> vendor_id -> store_id
-            $queryService = "SELECT id, group_name FROM cmp_group_contact WHERE status = 1 AND vendor_id = " . $this->getVendorIdByUserId($loginData) . " ORDER BY id DESC";
-
+            $queryService = "SELECT id, group_name FROM cmp_group_contact WHERE status = 1 AND active_status = 1 AND vendor_id = " . $this->getVendorIdByUserId($loginData) . " ORDER BY id DESC";
+// print_r($queryService);exit;
             $result = $db->query($queryService);
 
             if (!$result) {

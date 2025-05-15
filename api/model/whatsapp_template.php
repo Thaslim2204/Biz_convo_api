@@ -279,6 +279,8 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             $start_index = $data['pageIndex'] * $data['dataLength'];
             $end_index = $data['dataLength'];
             // echo $url;exit;
+
+            //fetch templates from meta
             $curl = curl_init();
 
             curl_setopt_array($curl, array(
@@ -296,6 +298,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             ));
 
             $response = curl_exec($curl);
+            // echo $response;exit;
             $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
 
             $responseData = json_decode($response, true);
@@ -313,12 +316,10 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             $result = $db->query($sql);
             $vendor_id = $result->fetch_assoc()['vendor_id'];
             // print_r($vendor_id);exit;
-            // Generate unique user ID
-            $uid = bin2hex(random_bytes(8));
-            $sql = "SELECT id, template_id, created_date, updated_date FROM cmp_whatsapp_templates WHERE status = 1 AND vendor_id = '" . $vendor_id . "' ";
+
+            $sql = "SELECT id, template_id, created_date, updated_date, media_url FROM cmp_whatsapp_templates WHERE status = 1 AND vendor_id = '" . $vendor_id . "' ";
             // print_r($sql);exit;
             $result = $db->query($sql);
-
 
             // print_r($totalCount);exit;
 
@@ -326,7 +327,8 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             while ($row = $result->fetch_assoc()) {
                 $dbTemplateDates[$row['template_id']] = [
                     "created_date" => $row['created_date'],
-                    "updated_date" => $row['updated_date']
+                    "updated_date" => $row['updated_date'],
+                    "media_url" => $row['media_url']
                 ];
             }
 
@@ -337,24 +339,42 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                 $templateCategory = $template['category'] ?? null;
                 $templatelanguage = $template['language'] ?? null;
                 $status = $template['status'] ?? null;
+                $headerHandles = $template['components'][0]['example']['header_handle'] ?? [];
+                // print_r(json_encode($headerHandles[0]['example']['header_handle']));
+                if (!empty($headerHandles[0])) {
+                    $mediaUrl = $headerHandles[0];
+
+                    // Upload the image and get media ID
+                    // $uploadResult = $this->uploadImageFromTemplateHandle($mediaUrl, $loginData);
+
+                    // if ($uploadResult['status']) {
+                    //     $template['local_path'] = $uploadResult['local_path'];
+                    $imgUrl = $template['local_path'] ? $template['local_path'] : null;
+                    // }
+                }
+
                 $templatedData = json_encode($template);
+                // Generate unique user ID
+                $uid = bin2hex(random_bytes(8));
+
                 if ($template_id && isset($dbTemplateDates[$template_id])) {
+                    // echo "comes here---";
                     // Exists: update status and updated_date
                     $template['created_date'] = $dbTemplateDates[$template_id]['created_date'];
                     $template['updated_date'] = $dbTemplateDates[$template_id]['updated_date'];
 
-                    $updateSql = "UPDATE cmp_whatsapp_templates 
-                                  SET status = 1, updated_date = NOW() 
+                    $updateSql = "UPDATE cmp_whatsapp_templates
+                                  SET template_status = '$status', media_url = '" . $imgUrl . "',
+                                  updated_date = NOW()
                                   WHERE
-                                     template_status = '" . $status . "' AND
-                                   template_id = '$template_id'";
+                                   template_id = '$template_id' and status = 1";
                     $db->query($updateSql);
                 } else if ($template_id) {
                     // Not exists: insert new record
                     $created_date = date('Y-m-d H:i:s');
-                    $insertSql = "INSERT INTO cmp_whatsapp_templates 
-                        (uid, vendor_id, template_id, template_name, category, language, body_data,  template_status, created_by) 
-                        VALUES ('$uid','$vendor_id','$template_id','$templateName' ,'$templateCategory','$templatelanguage','" . mysqli_real_escape_string($db, $templatedData) . "', '$status', '" . $loginData['user_id'] . "')";
+                    $insertSql = "INSERT INTO cmp_whatsapp_templates
+                        (uid, vendor_id, template_id, media_url, template_name, category, language, body_data,  template_status, created_by)
+                        VALUES ('$uid','$vendor_id','$template_id','" . $imgUrl . "','$templateName' ,'$templateCategory','$templatelanguage','" . mysqli_real_escape_string($db, $templatedData) . "', '$status', '" . $loginData['user_id'] . "')";
                     // print_r($insertSql);exit;
                     $db->query($insertSql);
 
@@ -368,8 +388,8 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
 
             $countResult = $db->query($totalCount);
             $row_cnt = mysqli_num_rows($countResult);
-            $query = "SELECT * FROM cmp_whatsapp_templates WHERE status = 1 AND vendor_id = '" . $vendor_id . "' 
-                ORDER BY id DESC 
+            $query = "SELECT * FROM cmp_whatsapp_templates WHERE status = 1 AND vendor_id = '" . $vendor_id . "'
+                ORDER BY id DESC
                  LIMIT $start_index, $end_index";
 
             $result = $db->query($query);
@@ -411,6 +431,13 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                         ),
                     );
                 }
+            } else {
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "404",
+                        "message" => "No data found...",
+                    ),
+                );
             }
             return $resultArray;
         } catch (Exception $e) {
@@ -873,29 +900,64 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
     {
         try {
             $groupID = $data['group']['groupId'];
+            // print_r($groupID);exit;
             $db = $this->dbConnect();
-            // Fetch group details with user-provided group name
+            // Let's assume getTestContactQuery() returns a SQL like: 
+            // "SELECT contact_id FROM test_contact WHERE status = 1"
+            $testContactSQL = $this->getTestContact($this->getVendorIdByUserId($loginData));
+            $vendor_id = $this->getVendorIdByUserId($loginData);
+
+
             $queryService = "SELECT 
-            gc.id AS groupId,
-            gc.group_name AS groupName,
-            gc.active_status AS activeStatus,
-            c.id AS contactId,
-            c.first_name AS firstName,
-            c.last_name AS lastName,
-            c.mobile,
-            c.email,
-            c.country,
-            c.language_code
-        FROM cmp_group_contact_mapping AS gcm
-        LEFT JOIN cmp_group_contact AS gc ON gc.id = gcm.group_id
-        LEFT JOIN cmp_contact AS c ON c.id = gcm.contact_id
-        WHERE gc.status = 1 
-            AND gcm.status = 1
-            AND c.status = 1
-            AND gc.active_status = 1  
-            AND gc.id = $groupID 
-            AND gc.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
-        ORDER BY gc.id DESC";
+    gc.id AS groupId,
+    gc.group_name AS groupName,
+    gc.active_status AS activeStatus,
+    c.id AS contactId,
+    c.first_name AS firstName,
+    c.last_name AS lastName,
+    c.mobile,
+    c.email,
+    c.country,
+    c.language_code,
+    0 AS is_test_contact
+FROM cmp_group_contact_mapping AS gcm
+LEFT JOIN cmp_group_contact AS gc ON gc.id = gcm.group_id
+LEFT JOIN cmp_contact AS c ON c.id = gcm.contact_id
+WHERE gc.status = 1 
+    AND gcm.status = 1
+    AND c.status = 1
+    AND gc.active_status = 1  
+    AND gc.vendor_id = $vendor_id
+    AND gc.id = $groupID
+GROUP BY c.mobile
+
+UNION
+
+SELECT 
+    $groupID AS groupId,
+    (SELECT group_name FROM cmp_group_contact WHERE id = $groupID) AS groupName,
+    (SELECT active_status FROM cmp_group_contact WHERE id = $groupID) AS activeStatus,
+    c.id AS contactId,
+    c.first_name AS firstName,
+    c.last_name AS lastName,
+    c.mobile,
+    c.email,
+    c.country,
+    c.language_code,
+    1 AS is_test_contact
+FROM cmp_contact c
+WHERE RIGHT(c.mobile, 10) IN (
+    SELECT RIGHT(test_contact, 10) FROM cmp_vendor_fb_credentials WHERE vendor_id = $vendor_id
+)
+AND c.status = 1 AND vendor_id = $vendor_id
+AND NOT EXISTS (
+    SELECT 1 FROM cmp_group_contact_mapping gcm WHERE gcm.contact_id = c.id AND gcm.group_id = $groupID
+)
+GROUP BY c.mobile
+ORDER BY groupId DESC, contactId ASC;
+";
+
+            // print_r($queryService); exit;
 
             $result = $db->query($queryService);
             $rowCount = mysqli_num_rows($result);
@@ -1044,20 +1106,40 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
         }
     }
 
+    public function getTestContact($vendorId)
+    {
+        $db = $this->dbConnect();
+        $queryTestContact = "SELECT test_contact
+                     FROM cmp_vendor_fb_credentials
+                     WHERE vendor_id = '$vendorId'
+                     LIMIT 1";
+
+        $resultTestContact = $db->query($queryTestContact);
+        $testContact = null;
+
+        if ($resultTestContact && $row = $resultTestContact->fetch_assoc()) {
+            $testContact = $row['test_contact'];
+            return $testContact;
+        }
+    }
+
     public function processQueue($data, $loginData, $campaign_id, $iscampaign)
     {
 
         try {
-            
+
             $vendor_id = $this->getVendorIdByUserId($loginData);
             $fetchResponse = $this->getUsingCampCredentials($data, $loginData);
-
+            // $testContact = $this->getTestContact($vendor_id);
             if ($fetchResponse['apiStatus']['code'] != "200") {
                 return $fetchResponse;
             }
 
+
+
             $contacts = $fetchResponse['result']['contacts'];
             $template = $fetchResponse['result']['template'];
+            // $contacts[]['mobile'] = $testContact;
 
             foreach ($contacts as $contact) {
                 $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'], $template['media_id'], $iscampaign, $campaign_id);
@@ -1087,7 +1169,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
 
                 //store the message info into queue table 
                 $storeQueue = "INSERT INTO cmp_whatsapp_message_queue (vendor_id, campaign_id,campaign_schedule, phone_number, template_name, payload, message_status) VALUES ('$vendor_id','$campaign_id','$campaignSchedule','" . $contact['mobile'] . "','" . $template['name'] . "','" . json_encode($body) . "', 'queued')";
-            //    print_r($storeQueue);exit;
+                //    print_r($storeQueue);exit;
                 $executeStoreQ = $db->query($storeQueue);
                 if ($executeStoreQ != true) {
                     throw new Exception("Unable to add into queue");

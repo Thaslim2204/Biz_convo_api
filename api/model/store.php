@@ -23,7 +23,6 @@ class STOREMODEL extends APIRESPONSE
                 $urlParam = explode('/', $urlPath);
                 if ($urlParam[1] == "get") {
                     $result = $this->getStore($data, $loginData);
-                
                 } elseif ($urlParam[1] === 'storedropdown') {
                     $result = $this->getStoredropdown($data, $loginData);
                     return $result;
@@ -56,7 +55,6 @@ class STOREMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] === 'importstorefromexcel') {
                     $result = $this->importStoreFromExcel($data, $loginData);
                     return $result;
-              
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -130,7 +128,8 @@ class STOREMODEL extends APIRESPONSE
                  ORDER BY cs.id DESC 
                  LIMIT $start_index, $end_index";
 
-            //   print_r($queryService);exit;
+            // print_r($queryService);
+            // exit;
             $result = $db->query($queryService);
             $row_cnt = mysqli_num_rows($result);
 
@@ -404,7 +403,7 @@ class STOREMODEL extends APIRESPONSE
             }
 
 
-            $dateNow = date("Y-m-d H:i:s", strtotime('+4 hours 30 minutes'));
+            $dateNow = date("Y-m-d H:i:s");
             $vendorUpdated = false;
             $userUpdated = false;
 
@@ -487,19 +486,19 @@ class STOREMODEL extends APIRESPONSE
     private function deleteStore($data)
     {
         try {
-
             $id = $data[2];
             $db = $this->dbConnect();
+
             // Check if the ID is provided and valid
-            if (empty($data[2])) {
+            if (empty($id)) {
                 throw new Exception("Invalid. Please enter your ID.");
             }
-            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_store WHERE id = $id AND status=1";
-            // print_r($checkIdQuery);exit;
+
+            // Check if store exists and is active
+            $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_store WHERE id = $id AND status = 1";
             $result = $db->query($checkIdQuery);
             $rowCount = $result->fetch_assoc()['count'];
-
-            // If ID doesn't exist, return error
+// print_r($checkIdQuery);exit;
             if ($rowCount == 0) {
                 $db->close();
                 return array(
@@ -510,33 +509,62 @@ class STOREMODEL extends APIRESPONSE
                 );
             }
 
-            //update delete query
+            // Begin Transaction
+            $db->begin_transaction();
 
-            $deleteQuery = "UPDATE cmp_store
-            SET status = 0 
-            WHERE id = " . $id . "";
-
-            // print_r($deleteQuery);exit;
-
-            if ($db->query($deleteQuery) === true) {
-                $db->close();
-                $statusCode = "200";
-                $statusMessage = "Store details deleted successfully";
-            } else {
-                $statusCode = "500";
-                $statusMessage = "Unable to delete Store details, please try again later";
+            //  Mark store as deleted
+            $deleteStoreQuery = "UPDATE cmp_store SET status = 0 WHERE id = $id";
+            if (!$db->query($deleteStoreQuery)) {
+                throw new Exception("Failed to update store status.");
             }
-            $resultArray = array(
+
+            // Update cmp_vendor_store_staff_mapping status = 0 for this store
+            $updateStaffMappingQuery = "UPDATE cmp_vendor_store_staff_mapping SET status = 0 WHERE store_id = $id";
+            if (!$db->query($updateStaffMappingQuery)) {
+                throw new Exception("Failed to update vendor-store-staff mapping.");
+            }
+
+            //  Update cmp_users status = 0 for all users linked to this store
+            // assuming cmp_vendor_store_staff_mapping has a user_id field
+            $updateUserStatusQuery = "
+            UPDATE cmp_users 
+            SET status = 0 
+            WHERE id IN (
+                SELECT staff_id 
+                FROM cmp_vendor_store_staff_mapping 
+                WHERE store_id = $id
+            )
+        ";
+            if (!$db->query($updateUserStatusQuery)) {
+                throw new Exception("Failed to update user status.");
+            }
+
+            // Commit transaction
+            $db->commit();
+            $db->close();
+
+            return array(
                 "apiStatus" => array(
-                    "code" => $statusCode,
-                    "message" => $statusMessage,
+                    "code" => "200",
+                    "message" => "Store  data deleted successfully",
                 ),
             );
-            return $resultArray;
         } catch (Exception $e) {
-            throw new Exception($e->getMessage());
+            // Rollback on error
+            if ($db && $db->connect_errno == 0) {
+                $db->rollback();
+                $db->close();
+            }
+            return array(
+                "apiStatus" => array(
+                    "code" => "500",
+                    "message" => $e->getMessage(),
+                ),
+            );
         }
     }
+
+
     public function useractive($data, $loginData)
     {
         try {
@@ -562,8 +590,19 @@ class STOREMODEL extends APIRESPONSE
                     ),
                 );
             }
-            $ActiveQuery = "UPDATE cmp_store SET active_status = 1 WHERE status = 1 AND id = $id";
-
+            $ActiveQuery = "UPDATE cmp_store cs
+                        JOIN cmp_vendor_store_staff_mapping cvsm ON cs.id = cvsm.store_id
+                        JOIN cmp_users cu ON cvsm.staff_id = cu.id
+                        SET 
+                            cs.active_status = 1,
+                            cvsm.mapping_status = 1,
+                            cu.active_status = 1
+                        WHERE 
+                            cs.status = 1 
+                            AND cvsm.status = 1
+                            AND cs.id = $id;
+                    ";
+            // print_r(    $ActiveQuery);exit;
             if ($db->query($ActiveQuery) === true) {
                 $db->close();
                 $statusCode = "200";
@@ -583,7 +622,7 @@ class STOREMODEL extends APIRESPONSE
             throw new Exception($e->getMessage());
         }
     }
-    
+
     public function userdeactive($data, $loginData)
     {
         try {
@@ -611,7 +650,18 @@ class STOREMODEL extends APIRESPONSE
                     ),
                 );
             }
-            $deactiveQuery = "UPDATE cmp_store SET active_status = 0 WHERE status = 1 AND id = $id";
+            $deactiveQuery = "UPDATE cmp_store cs
+                        JOIN cmp_vendor_store_staff_mapping cvsm ON cs.id = cvsm.store_id
+                        JOIN cmp_users cu ON cvsm.staff_id = cu.id
+                        SET 
+                            cs.active_status = 0,
+                            cvsm.mapping_status = 0,
+                            cu.active_status = 0
+                        WHERE 
+                            cs.status = 1 
+                            AND cvsm.status = 1
+                            AND cs.id = $id
+                    ";
 
             if ($db->query($deactiveQuery) === true) {
                 $db->close();
@@ -632,7 +682,7 @@ class STOREMODEL extends APIRESPONSE
             throw new Exception($e->getMessage());
         }
     }
-    
+
 
     public function importStoreFromExcel($data, $loginData)
     {
@@ -687,7 +737,7 @@ class STOREMODEL extends APIRESPONSE
 
             $vendorRow = $result->fetch_assoc();
             $vendor_id = $vendorRow['vendor_id'];
-            
+
             // Process Excel Rows
             foreach ($rows as $row) {
                 $storeName = trim($row['B']);
@@ -703,19 +753,23 @@ class STOREMODEL extends APIRESPONSE
                 if (empty($storeName)) {
                     throw new Exception("Invalid data found in row: Store Name is missing.");
                 }
-                
+
                 if (empty($address1)) {
                     throw new Exception("Invalid data found in row: Address is missing.");
                 }
-                
+
                 if (empty($phone)) {
-                    throw new Exception("Invalid data found in row: Phone number is missing.");
+                    throw new Exception("Invalid data found in row: Mobile number is missing.");
                 }
-                
+
+                if (!preg_match('/^[0-9]{10,15}$/', $phone)) {
+                    throw new Exception("Invalid data found in row: Mobile number must contain only digits and be 10 to 15 digits long.");
+                }
+
                 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
                     throw new Exception("Invalid data found in row: Email address is invalid.");
                 }
-                
+
 
                 // Check if Store Exists
                 $storeQuery = "SELECT id FROM cmp_store WHERE store_name = '$storeName' LIMIT 1";
@@ -725,16 +779,32 @@ class STOREMODEL extends APIRESPONSE
                 if ($storeResult->num_rows > 0) {
                     $storeRow = $storeResult->fetch_assoc();
                     $store_id = $storeRow['id'];
-                } else {
 
-                    // Insert Store into cmp_store
+                    // UPDATE existing store with new values
+                    $updateStoreQuery = "UPDATE cmp_store SET 
+                            address_line1 = '$address1',
+                            address_line2 = '$address2',
+                            dist = '$dist',
+                            state = '$state',
+                            pincode = '$pincode',
+                            phone = '$phone',
+                            email = '$email',
+                            updated_by = '$user_id',
+                            updated_date = NOW()
+                         WHERE id = '$store_id'";
+                    if (!$db->query($updateStoreQuery)) {
+                        throw new Exception("Error updating store: " . $db->error);
+                    }
+                } else {
+                    // INSERT new store
                     $insertStoreQuery = "INSERT INTO cmp_store (uid,store_name, address_line1,address_line2,dist,state,pincode, phone, email, created_by, status) 
-                                         VALUES (' $uid ','$storeName', '$address1', '$address2', '$dist', '$state', '$pincode', '$phone', '$email', '$user_id', 1)";
+                         VALUES ('$uid','$storeName', '$address1', '$address2', '$dist', '$state', '$pincode', '$phone', '$email', '$user_id', 1)";
                     if (!$db->query($insertStoreQuery)) {
                         throw new Exception("Error inserting store: " . $db->error);
                     }
                     $store_id = $db->insert_id;
                 }
+
 
                 // Check if Store is Already Mapped to Vendor
                 $mappingQuery = "SELECT id FROM cmp_vendor_store_mapping WHERE vendor_id = '$vendor_id' AND store_id = '$store_id' LIMIT 1";
@@ -751,7 +821,7 @@ class STOREMODEL extends APIRESPONSE
 
             return ["apiStatus" => ["code" => "200", "message" => "Excel file uploaded and processed successfully."]];
         } catch (Exception $e) {
-            return ["apiStatus" => ["code" => "401", "message" =>$e->getMessage()]];
+            return ["apiStatus" => ["code" => "401", "message" => $e->getMessage()]];
         }
     }
 
@@ -796,8 +866,8 @@ class STOREMODEL extends APIRESPONSE
             // Fetch staff details
             $query = "SELECT*
              FROM cmp_store c 
-                  WHERE status = 1  AND created_by='" . $loginData['user_id'] . "'";
-            // print_r($query);exit;
+                  WHERE status = 1  AND id IN (SELECT store_id FROM cmp_vendor_store_mapping WHERE vendor_id = $vendor_id)";
+            //  print_r($query);exit;
             $result = $db->query($query);
 
             if ($result->num_rows === 0) {
@@ -813,8 +883,8 @@ class STOREMODEL extends APIRESPONSE
                 $sheet->setCellValue($column++ . $rowIndex, $row['address_line1']);
                 $sheet->setCellValue($column++ . $rowIndex, $row['address_line2']);
                 $sheet->setCellValue($column++ . $rowIndex, $row['dist']);
-                $sheet->setCellValue($column++ . $rowIndex, $row['state	']);
-                $sheet->setCellValue($column++ . $rowIndex, $row['pincode	']);
+                $sheet->setCellValue($column++ . $rowIndex, $row['state']);
+                $sheet->setCellValue($column++ . $rowIndex, $row['pincode']);
                 $sheet->setCellValue($column++ . $rowIndex, $row['phone']);
                 $sheet->setCellValue($column++ . $rowIndex, $row['email']);
                 $sheet->getStyle('A' . $rowIndex . ':' . $column . $rowIndex)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER); // Center align
@@ -863,7 +933,7 @@ class STOREMODEL extends APIRESPONSE
             }
 
             // Set column headers
-            $headers = ['S.No', 'Store Name', 'Address Line 1','Address Line 2','District','State','Pincode', 'Phone', 'Email'];
+            $headers = ['S.No', 'Store Name', 'Address Line 1', 'Address Line 2', 'District', 'State', 'Pincode', 'Phone', 'Email'];
             $column = 'A';
             foreach ($headers as $header) {
                 $sheet->setCellValue($column . '1', $header);

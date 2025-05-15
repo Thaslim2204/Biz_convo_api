@@ -5,6 +5,14 @@ require_once "include/apiResponseGenerator.php";
 require_once "include/dbConnection.php";
 require_once "model/whatsapp_template.php";
 
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Font;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+
+require __DIR__ . '/../../vendor/autoload.php';
+
 class CAMPAIGNMODEL extends APIRESPONSE
 {
     private function processMethod($data, $loginData)
@@ -25,6 +33,16 @@ class CAMPAIGNMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] == "deactive") {
                     $result = $this->campaigndeactive($data, $loginData);
                     return $result;
+                } elseif ($urlParam[1] === 'exporttoexcel') {
+                    if ($urlParam[2] === 'queue') {
+                        $result = $this->exportwhatsappQueuetoexcel($data, $loginData, $urlParam);
+                        return $result;
+                    } else if ($urlParam[2] === 'executed') {
+                        $result = $this->exportwhatsappQueuetoexcel($data, $loginData, $urlParam);
+                        return $result;
+                    } else {
+                        throw new Exception("Unable to proceed your request!");
+                    }
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -215,6 +233,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
     public function getcampaign($data, $loginData)
     {
         try {
+            
             $id = $data[2];
             if (empty($id)) {
                 throw new Exception("Bad request");
@@ -377,7 +396,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
             // Schedule Time
             $scheduleAt = !empty($data['scheduleStatus']) && $data['scheduleStatus'] === true
                 ? mysqli_real_escape_string($db, $data['scheduledAt'])
-                : date("Y-m-d H:i:s", strtotime("+4 hours 30 minutes"));
+                : date("Y-m-d H:i:s");
 
             // Insert Campaign
             $title = mysqli_real_escape_string($db, $data['title']);
@@ -385,10 +404,10 @@ class CAMPAIGNMODEL extends APIRESPONSE
             $restrictLangCode = mysqli_real_escape_string($db, $data['restrictLangCode']);
             $sendNum = mysqli_real_escape_string($db, $data['SendNum']);
             $createdBy = mysqli_real_escape_string($db, $loginData['user_id']);
-
-            $sql = "INSERT INTO cmp_campaign (group_id, template_id, title, restrictLangCode, timezone, schedule_at, send_status,send_num,media_id, created_by) 
-        VALUES ('$groupId', '$template_id', '$title', '$restrictLangCode', '$timezone_zoneName', '$scheduleAt','Scheduled' ,'$sendNum','$mediaId', '$createdBy')";
-
+            $date = date("Y-m-d H:i:s");
+            $sql = "INSERT INTO cmp_campaign (group_id, template_id, title, restrictLangCode, timezone, schedule_at, send_status,send_num,media_id, created_by,created_date) 
+        VALUES ('$groupId', '$template_id', '$title', '$restrictLangCode', '$timezone_zoneName', '$scheduleAt','Scheduled' ,'$sendNum','$mediaId', '$createdBy','$date')";
+// print_r($sql);exit;
             if (!mysqli_query($db, $sql)) {
                 throw new Exception("Error inserting campaign: " . mysqli_error($db));
             }
@@ -659,9 +678,9 @@ class CAMPAIGNMODEL extends APIRESPONSE
                 $query .= " AND wmq.message_status != 'queued'";
                 $message = "executed";
             }
-            if ($data['fiterBy']) {
-                $query .= " AND wmq.phone_number LIKE '%" . mysqli_real_escape_string($db, $data['fiterBy']) . "%' or wmq.template_name LIKE '%" . mysqli_real_escape_string($db, $data['fiterBy']) . "%' 
-                            or wmq.message_status LIKE '%" . mysqli_real_escape_string($db, $data['fiterBy']) . "%' ";
+            if ($data['filterBy']) {
+                $query .= " AND (wmq.phone_number LIKE '%" . mysqli_real_escape_string($db, $data['filterBy']) . "%' or wmq.template_name LIKE '%" . mysqli_real_escape_string($db, $data['filterBy']) . "%' 
+                            or wmq.message_status LIKE '%" . mysqli_real_escape_string($db, $data['filterBy']) . "%' )";
             }
             $query .= " ORDER BY wmq.created_date DESC";
 
@@ -935,107 +954,122 @@ class CAMPAIGNMODEL extends APIRESPONSE
 
 
 
-    // public function importStoreFromExcel($data, $loginData)
-    // {
-    //     $resultArray = [];
-    //     try {
-    //         $db = $this->dbConnect();
+    public function exportwhatsappQueuetoexcel($data, $loginData, $urlParam)
+    {
+        try {
 
-    //         // Validate file upload
-    //         if (!isset($_FILES['file']) || $_FILES['file']['error'] != UPLOAD_ERR_OK) {
-    //             throw new Exception("No valid file uploaded.");
-    //         }
+            // print_r($urlParam);exit;
+            // Check if loginData exists and contains user_id
+            if (!isset($loginData['user_id'])) {
+                return [
+                    "apiStatus" => [
+                        "code" => "400",
+                        "message" => "Missing user_id in loginData."
+                    ]
+                ];
+            }
 
-    //         $file = $_FILES['file'];
-    //         $filePath = $file['tmp_name'];
-    //         $fileType = $file['type'];
-    //         $fileSize = $file['size'];
+            $db = $this->dbConnect();
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
 
-    //         // Allowed file types
-    //         $allowedTypes = [
-    //             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // XLSX
-    //             'application/vnd.ms-excel' // XLS
-    //         ];
+            // Set column headers
+            $headers = ['S.No', 'First Name', 'Last Name', 'Mobile Number', 'Template Name', 'Message Status', 'Updated Date', 'Reason'];
+            $column = 'A';
+            foreach ($headers as $header) {
+                $sheet->setCellValue($column . '1', $header);
+                $sheet->getStyle($column . '1')->getFont()->setBold(true);
+                $sheet->getStyle($column . '1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getColumnDimension($column)->setAutoSize(true);
+                $column++;
+            }
 
-    //         if (!in_array($fileType, $allowedTypes)) {
-    //             throw new Exception("Invalid file type. Please upload an Excel file.");
-    //         }
+            // Fetch staff details
+            $campaign_id = $data[3];
+            if (empty($campaign_id)) {
+                return [
+                    "apiStatus" => [
+                        "code" => "400",
+                        "message" => "Campaign ID is required."
+                    ]
+                ];
+            }
+            // Fetch queue data for the given campaign
+            $query =  "SELECT wmq.id, c.first_name, c.last_name, wmq.phone_number, wmq.template_name, wmq.message_status, wmq.updated_date, wmq.error_message
+                        FROM cmp_whatsapp_message_queue AS wmq
+                        LEFT JOIN cmp_contact AS c ON c.mobile = wmq.phone_number AND c.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
+                        WHERE wmq.campaign_id = '$campaign_id' AND wmq.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
+                        ";
+            if ($urlParam[2] === 'queue') {
+                $query .= " AND wmq.message_status = 'queued'";
+                $message = "queue";
+            } else if ($urlParam[2] === 'executed') {
+                $query .= " AND wmq.message_status != 'queued'";
+                $message = "executed";
+            }
 
-    //         // Check file size (Max: 5MB)
-    //         if ($fileSize > 5 * 1024 * 1024) {
-    //             throw new Exception("File size exceeds 5MB limit.");
-    //         }
+            $query .= " ORDER BY wmq.created_date DESC";
 
-    //         // Read Excel file
-    //         $spreadsheet = IOFactory::load($filePath);
-    //         $sheet = $spreadsheet->getActiveSheet();
-    //         $rows = $sheet->toArray(null, true, true, true);
 
-    //         if (empty($rows) || count($rows) < 2) {
-    //             throw new Exception("Excel file is empty or invalid format.");
-    //         }
+            // print_r($query);exit;
+            $result = $db->query($query);
 
-    //         unset($rows[1]); // Remove header row
+            if ($result->num_rows === 0) {
+                return [
+                    "apiStatus" => [
+                        "code" => "204",
+                        "message" => "No data found."
+                    ]
+                ];
+            }
 
-    //         // Get the Vendor ID from the login data
-    //         $user_id = $loginData['user_id'];
-    //         $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = '$user_id'";
-    //         $result = $db->query($sql);
+            // Status mapping
+            $statusMap = [
+                'queued' => 'Queued',
+                'sent' => 'Sent',
+                'failed' => 'Failed',
+                'delivered' => 'Delivered',
+                'undelivered' => 'Failed',
+                'expired' => 'Failed'
+            ];
 
-    //         if (!$result || $result->num_rows === 0) {
-    //             throw new Exception("Vendor ID not found for user ID: $user_id");
-    //         }
+            // Fill data
+            $rowIndex = 2;
+            $sno = 1;
+            while ($row = $result->fetch_assoc()) {
+                $messageStatus = $statusMap[$row['message_status']] ?? ucfirst($row['message_status']);
 
-    //         $vendorRow = $result->fetch_assoc();
-    //         $vendor_id = $vendorRow['vendor_id'];
-    //         $uid = bin2hex(random_bytes(8));
-    //         // Process Excel Rows
-    //         foreach ($rows as $row) {
-    //             $storeName = trim($row['B']);
-    //             $address   = trim($row['C']);
-    //             $phone     = trim($row['D']);
-    //             $email     = trim($row['E']);
+                $sheet->setCellValue('A' . $rowIndex, $sno);
+                $sheet->setCellValue('B' . $rowIndex, $row['first_name']);
+                $sheet->setCellValue('C' . $rowIndex, $row['last_name']);
+                $sheet->setCellValue('D' . $rowIndex, $row['phone_number']);
+                $sheet->setCellValue('E' . $rowIndex, $row['template_name']);
+                $sheet->setCellValue('F' . $rowIndex, $messageStatus);
+                $sheet->setCellValue('G' . $rowIndex, $row['updated_date']);
+                $sheet->setCellValue('H' . $rowIndex, $row['error_message']);
 
-    //             if (empty($storeName) || empty($address) || empty($phone) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    //                 throw new Exception("Invalid data found in row: " . json_encode($row));
-    //             }
+                $rowIndex++;
+                $sno++;
+            }
 
-    //             // Check if Store Exists
-    //             $storeQuery = "SELECT id FROM cmp_store WHERE store_name = '$storeName' LIMIT 1";
-    //             $storeResult = $db->query($storeQuery);
+            // Output Excel file to browser
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="WhatsApp_' . $message . '_data_' . date('Ymd_His') . '.xlsx"');
+            header('Cache-Control: max-age=0');
 
-    //             if ($storeResult->num_rows > 0) {
-    //                 $storeRow = $storeResult->fetch_assoc();
-    //                 $store_id = $storeRow['id'];
-    //             } else {
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output'); // Send file to browser
 
-    //                 // Insert Store into cmp_store
-    //                 $insertStoreQuery = "INSERT INTO cmp_store (uid,store_name, address, phone, email, created_by, status) 
-    //                                      VALUES (' $uid ','$storeName', '$address', '$phone', '$email', '$user_id', 1)";
-    //                 if (!$db->query($insertStoreQuery)) {
-    //                     throw new Exception("Error inserting Group: " . $db->error);
-    //                 }
-    //                 $store_id = $db->insert_id;
-    //             }
-
-    //             // Check if Store is Already Mapped to Vendor
-    //             $mappingQuery = "SELECT id FROM cmp_vendor_store_mapping WHERE vendor_id = '$vendor_id' AND store_id = '$store_id' LIMIT 1";
-    //             $mappingResult = $db->query($mappingQuery);
-
-    //             if ($mappingResult->num_rows === 0) {
-    //                 // Insert Mapping into cmp_vendor_store_mapping
-    //                 $insertMappingQuery = "INSERT INTO cmp_vendor_store_mapping (vendor_id, store_id) VALUES ('$vendor_id', '$store_id')";
-    //                 if (!$db->query($insertMappingQuery)) {
-    //                     throw new Exception("Error mapping Group to vendor: " . $db->error);
-    //                 }
-    //             }
-    //         }
-
-    //         return ["apiStatus" => ["code" => "200", "message" => "Excel file uploaded and processed successfully."]];
-    //     } catch (Exception $e) {
-    //         return ["apiStatus" => ["code" => "401", "message" => $e->getMessage()]];
-    //     }
-    // }
+            exit;
+        } catch (Exception $e) {
+            return [
+                "apiStatus" => [
+                    "code" => "500",
+                    "message" => $e->getMessage()
+                ]
+            ];
+        }
+    }
 
     //export the data to excel 
     // public function exportStoreToExcel($data, $loginData)
@@ -1183,7 +1217,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
      JOIN cmp_whatsapp_templates AS wt ON wt.id = c.template_id
      WHERE c.status = 1  AND wt.status = 1 AND c.active_status=0
      AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData);
-// print_r($countQuery);exit;
+            // print_r($countQuery);exit;
             $countResult = $db->query($countQuery);
             $countRow = $countResult->fetch_assoc();
             $recordCount = $countRow['totalCount']; // Total record count

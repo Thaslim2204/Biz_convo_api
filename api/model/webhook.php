@@ -136,6 +136,19 @@ class WEBHOOKMODEL extends APIRESPONSE
         // $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         // // print_r($lines);exit;
         // return in_array($messageId, $lines);
+
+        $db = $this->dbConnect();
+        $query = "SELECT id FROM cmp_whatsapp_messages WHERE wam_id = '$messageId' AND is_reply = 1";
+        $result = mysqli_query($db, $query);
+        $rowCount = mysqli_num_rows($result);
+        if ($rowCount > 0) {
+            echo "Message already processed\n";
+            return true;
+        } else {
+            echo "Message not processed\n";
+            return false; 
+        }
+
     }
 
     private function markMessageAsProcessed($messageId)
@@ -174,6 +187,7 @@ class WEBHOOKMODEL extends APIRESPONSE
 
         if ($messageId && !$this->isMessageProcessed($messageId)) {
 
+            echo "comes in negative case";
             if (!empty($messageText) && $messageText !== 'No text') {
                 $db = $this->dbConnect();
                 $lowerMsg = strtolower(trim($messageText));
@@ -188,15 +202,15 @@ class WEBHOOKMODEL extends APIRESPONSE
 
                 $conditionStr = implode(' OR ', $conditions);
                 $botQuery = "
-            SELECT r.*, t.name AS trigger_type 
-            FROM cmp_bot_replies r
-            JOIN cmp_bot_trigger_type t ON t.id = r.trigger_type_id
-            WHERE r.status = 1 AND r.active_status = 1 
-           AND r.vendor_id = $vendorId
-            AND ($conditionStr)
-            ORDER BY r.id DESC
-            LIMIT 1
-        ";
+                    SELECT r.*, t.name AS trigger_type 
+                    FROM cmp_bot_replies r
+                    JOIN cmp_bot_trigger_type t ON t.id = r.trigger_type_id
+                    WHERE r.status = 1 AND r.active_status = 1 
+                AND r.vendor_id = $vendorId
+                    AND ($conditionStr)
+                    ORDER BY r.id DESC
+                    LIMIT 1
+                ";
 
                 $result = mysqli_query($db, $botQuery);
                 $matchedReply = null;
@@ -383,7 +397,7 @@ class WEBHOOKMODEL extends APIRESPONSE
 
                 $insertQuery = "
                     INSERT INTO cmp_whatsapp_messages 
-                    (vendor_id, agent, agent_contact, message_type, wam_id, message_body, media_link, message_status, created_date)
+                    (vendor_id, agent, agent_contact, message_type, wam_id, message_body, media_id, message_status, created_date)
                     VALUES 
                     ('$vendor_id', '$agent', '$agent_contact', '$messageType', '$wam_id', '$messageText', '$mediaLink', '$messageStatus', '$message_datetime')
                 ";
@@ -447,7 +461,7 @@ class WEBHOOKMODEL extends APIRESPONSE
                 $updateQueueQuery .= " WHERE wam_id = '$wam_id'";
                 mysqli_query($db, $updateQueueQuery);
             }
-            // print_r($updateQueueQuery);
+            print_r($updateQueueQuery);
         }
     }
 
@@ -626,6 +640,8 @@ class WEBHOOKMODEL extends APIRESPONSE
     // Helper function to make cURL request
     private function makeCurlRequest($url, $data, $businessPhoneNumberId)
     {
+        // print_r(json_encode($data));
+        // exit;
         $CredentialsData = $this->fbCredentials($businessPhoneNumberId);
         $graphApiToken = $CredentialsData['access_token']; // Get access_token value from array
         $ch = curl_init();
@@ -640,7 +656,23 @@ class WEBHOOKMODEL extends APIRESPONSE
 
         $response = curl_exec($ch);
         curl_close($ch);
-        print_r($response);
+        // print_r($response);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $db = $this->dbConnect();
+
+        if ($httpCode == 200) {
+
+            $update = "UPDATE cmp_whatsapp_messages
+                        SET is_reply = '1',
+                            updated_date = NOW()
+                        WHERE  wam_id = '" . $data['context']['message_id'] . "' AND agent_contact = '" . $data['to'] . "'
+                    ";
+            mysqli_query($db, $update);
+            //     $update = "INSERT INTO cmp_whatsapp_messages 
+            //     (vendor_id, campaign_id, agent, agent_contact, wam_id, message_type, message_body, message_status)
+            //     VALUES ('$vendorId', '$campaignId', 'bot', '$contactMobile', '$wamId', 'template', '" . json_encode($payload) . "', '$messageStatus')
+            // ";
+        }
         return $response;
     }
 }

@@ -123,7 +123,7 @@ class STAFFMODEL extends APIRESPONSE
                              FROM cmp_users u
                              JOIN cmp_user_role_mapping r ON u.id = r.user_id
                              JOIN cmp_vendor_store_staff_mapping s ON u.id = s.staff_id
-                             WHERE u.created_by = " . $loginData['user_id'] . " AND r.role_id = 4 AND u.status = 1
+                             WHERE u.created_by = " . $loginData['user_id'] . " AND r.role_id = 4 AND u.status = 1 And s.mapping_status = 1 AND s.status = 1
                              ORDER BY u.id DESC 
                              LIMIT $start_index, $end_index";
 

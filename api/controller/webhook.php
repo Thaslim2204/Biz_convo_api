@@ -21,7 +21,7 @@ class WEBHOOK extends WEBHOOKMODEL
             // print_r("thhasasas");exit;
             if ($method === "POST") {
                 // echo"Webhook request received\n";exit;
-                file_put_contents("webhook_log.txt", date("Y-m-d H:i:s") . " - " . json_encode($data, JSON_PRETTY_PRINT) . "\n", FILE_APPEND);
+                // file_put_contents("webhook_log.txt", date("Y-m-d H:i:s") . " - " . json_encode($data, JSON_PRETTY_PRINT) . "\n", FILE_APPEND);
                 // print_r($token);exit;
                 // $this->processWebhookData($token);
                 $this->processWebhookData();

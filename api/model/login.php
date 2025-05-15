@@ -18,7 +18,7 @@ class LOGINMODEL extends APIRESPONSE
                 return $result;
 
                 break;
-           
+
             default:
                 $result = $this->handle_error($request);
                 return $result;
@@ -53,30 +53,51 @@ class LOGINMODEL extends APIRESPONSE
             $db = $this->dbConnect();
             if ($request['loginType'] === "vendor") {
                 $email = $request['email_id'];
-    
+
                 // Get user ID
-                $checkUserQuery = "SELECT id FROM cmp_users WHERE email = '$email' AND status = 1";
+                $checkUserQuery = "SELECT id FROM cmp_users WHERE email = '$email' AND status = 1 AND active_status = 1";
+                // print_r($checkUserQuery);exit;
                 $result = $db->query($checkUserQuery);
                 $user = mysqli_fetch_assoc($result);
-            
+
                 if (!$user) {
                     throw new Exception("User not found or inactive.");
                 }
-            
+
                 $userId = $user['id'];
-            
+
+                // vendor id for user id
+
+                $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $userId";
+                $result = $db->query($sql);
+                $vendor_id = $result->fetch_assoc()['vendor_id'];
+                if (empty($vendor_id)) {
+                    throw new Exception("Vendor ID not found for user ID: $userId");
+                }
+                //check if vendor is active
+                $checkVendorQuery = "SELECT status FROM cmp_vendor WHERE id = '$vendor_id' AND status = 1 AND active_status = 1";
+                $vendorResult = $db->query($checkVendorQuery);
+                if ($vendorResult && mysqli_num_rows($vendorResult) > 0) {
+                    $vendorData = mysqli_fetch_assoc($vendorResult);
+                    if ($vendorData['status'] != 1) {
+                        throw new Exception("Vendor is inactive.");
+                    }
+                } else {
+                    throw new Exception("Vendor not found or inactive.");
+                }
+
                 // Check user role
                 $checkRoleQuery = "SELECT role_id FROM cmp_user_role_mapping WHERE user_id = '$userId' AND status = 1";
                 $roleResult = $db->query($checkRoleQuery);
-            
+
                 if ($roleResult && mysqli_num_rows($roleResult) > 0) {
                     $roleData = mysqli_fetch_assoc($roleResult);
-            
+
                     if ($roleData['role_id'] == 1) { // Super admin not allowed for vendor login
                         throw new Exception("Super Admin is not allowed to login as Vendor.");
                     }
                 }
-            
+
                 //Get vendor details
                 $query = "SELECT 
                             u.first_name, u.last_name, u.username, u.email, u.password, u.id, 
@@ -84,21 +105,21 @@ class LOGINMODEL extends APIRESPONSE
                           FROM cmp_users u 
                           JOIN cmp_user_role_mapping urm ON urm.user_id = u.id 
                           JOIN cmp_mst_role cmr ON cmr.role_id = urm.role_id 
-                          WHERE u.email = '$email' AND u.status = 1";
+                          WHERE u.email = '$email' AND u.status = 1 AND u.active_status = 1";
                 // print_r($query);exit;
-            //  }
-            //   elseif ($request['loginType'] === "super_admin") {
-            //     $query = "SELECT u.first_name,u.last_name,u.username, u.password, u.id,urm.role_id,rl.role_name FROM cmp_users u JOIN cmp_user_role_mapping urm ON urm.user_id = u.id JOIN cmp_mst_role rl ON urm.id = rl.role_id   WHERE
-            //      u.email = '" . $request['email_id'] . "' AND rl.role_name='" . $request['loginType'] . "'
-            //     AND u.status = 1";
+                //  }
+                //   elseif ($request['loginType'] === "super_admin") {
+                //     $query = "SELECT u.first_name,u.last_name,u.username, u.password, u.id,urm.role_id,rl.role_name FROM cmp_users u JOIN cmp_user_role_mapping urm ON urm.user_id = u.id JOIN cmp_mst_role rl ON urm.id = rl.role_id   WHERE
+                //      u.email = '" . $request['email_id'] . "' AND rl.role_name='" . $request['loginType'] . "'
+                //     AND u.status = 1";
                 // print_r($query);exit;
 
-           
+
             } else {
                 throw new Exception("Your Login has not actiated.");
             }
             $result = $db->query($query);
-// print_r($query);exit;
+            // print_r($query);exit;
             if ($result) {
 
                 $row_cnt = mysqli_num_rows($result);
@@ -124,9 +145,9 @@ class LOGINMODEL extends APIRESPONSE
 
             $userDetails = array(
                 'loginid' => $data['id'],
-               'first_name' => $data['first_name'] , 
-               'last_name' => $data['last_name'], 
-               'username' => $data['username'], 
+                'first_name' => $data['first_name'],
+                'last_name' => $data['last_name'],
+                'username' => $data['username'],
                 'roles' => $roles,
             );
             $result = array(
@@ -235,32 +256,32 @@ class LOGINMODEL extends APIRESPONSE
             'typ' => 'JWT',
             'alg' => 'HS256',
         ]);
-    
+
         // Create the token payload
         $payload = json_encode([
             'user_id' => $userId,
             'name' => $name,
             'exp' => 3600,
         ]);
-    
+
         // Encode Header
         $base64UrlHeader = str_replace(['+', '/', '='], ['', '', ''], base64_encode($header));
-    
+
         // Encode Payload
         $base64UrlPayload = str_replace(['+', '/', '='], ['', '', ''], base64_encode($payload));
-    
+
         // Create Signature Hash
         $signature = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, "secret", true);
-    
+
         // Encode Signature to Base64Url String
         $base64UrlSignature = str_replace(['+', '/', '='], ['', '', ''], base64_encode($signature));
-    
+
         // Create JWT
         $token = $base64UrlHeader . "." . $base64UrlPayload . "." . $base64UrlSignature;
-    
+
         return $token;
     }
-    
+
 
     /**
      * Function is to check the Login Authendication By token
@@ -290,7 +311,7 @@ class LOGINMODEL extends APIRESPONSE
 
             $row_cnt = mysqli_num_rows($result);
             $data = mysqli_fetch_array($result, MYSQLI_ASSOC);
-// print_r($data);exit;
+            // print_r($data);exit;
             if ($row_cnt < 1) {
                 throw new Exception("Unauthorized Login");
             }
@@ -325,7 +346,5 @@ class LOGINMODEL extends APIRESPONSE
             );
         }
     }
-    private function handle_error($request)
-    {
-    }
+    private function handle_error($request) {}
 }

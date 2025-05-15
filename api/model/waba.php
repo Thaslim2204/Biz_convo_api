@@ -53,6 +53,13 @@ class WABAMODEL extends APIRESPONSE
                         $result = $this->updateBusinessProfile($data, $loginData);
                     }
                     return $result;
+                } else if ($urlParam[1] == "add") {
+                    if ($urlParam[2] == "testContact") {
+                        $result = $this->addTestContact($data, $loginData);
+                    }
+                    return $result;
+                } else {
+                    throw new Exception("Unable to proceed your request");
                 }
                 return $result;
 
@@ -522,7 +529,7 @@ class WABAMODEL extends APIRESPONSE
                 throw new Exception("Database query failed: " . $db->error);
             }
 
-            $configQuery = "SELECT webhook_configured, whatsapp_configured from cmp_vendor_fb_credentials where vendor_id = '$vendor_id'";
+            $configQuery = "SELECT webhook_configured, whatsapp_configured, test_contact from cmp_vendor_fb_credentials where vendor_id = '$vendor_id'";
             $configResult = $db->query($configQuery);
             $configQueryRowCnt = mysqli_num_rows($configResult);
             if ($configQueryRowCnt > 0) {
@@ -544,7 +551,8 @@ class WABAMODEL extends APIRESPONSE
                     ],
                     "result" => [
                         "webhook_configured" => $webhookConfig,
-                        "whatsapp_configured" => $whatsappConfig
+                        "whatsapp_configured" => $whatsappConfig,
+                        "test_contact" => $configData['test_contact']
                     ]
                 ];
             } else {
@@ -1026,6 +1034,74 @@ class WABAMODEL extends APIRESPONSE
 
         curl_close($curl);
         return $response;
+    }
+
+
+    public function addTestContact($data, $loginData)
+    {
+        try {
+            $db = $this->dbConnect();
+
+            $user_id = $loginData['user_id'];
+            $test_contact = $data['test_contact'];
+
+            // 1. Get vendor_id from cmp_vendor_user_mapping
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id";
+            $result = $db->query($sql);
+            $vendor_id = $result->fetch_assoc()['vendor_id'];
+
+            if (empty($vendor_id)) {
+                throw new Exception("Vendor ID not found for user ID: $user_id");
+            }
+
+            if (empty($test_contact)) {
+                throw new Exception("Test contact is required");
+            }
+
+            // 3. Check if record already exists in cmp_vendor_sms_credentials
+            $checkSql = "SELECT id FROM cmp_vendor_fb_credentials WHERE vendor_id = $vendor_id and status = 1";
+            $checkResult = $db->query($checkSql);
+
+            if ($checkResult->num_rows > 0) {
+
+                $date = date("Y-m-d H:i:s");
+                $insertSql = "UPDATE cmp_vendor_fb_credentials SET
+                                test_contact = '" . $test_contact . "',
+                                updated_by = '$user_id',
+                                updated_date = '" . $date . "'
+                                where vendor_id = '" . $vendor_id . "'";
+            } else {
+                // 4. Insert new SMS credentials
+                $insertSql = "INSERT INTO cmp_vendor_fb_credentials
+                (vendor_id, test_contact, created_by, created_date, status)
+                VALUES
+                ('$vendor_id', '" . $test_contact . "', '$user_id', NOW(), 1)";
+            }
+
+            if ($db->query($insertSql) === true) {
+                $db->close();
+                $resultArray = array(
+                    "apiStatus" => array(
+                        "code" => "200",
+                        "message" => "Test contact configured successfully.",
+                    ),
+                );
+            } else {
+                throw new Exception("Error inserting Whatsapp test contact credentials: " . $db->error);
+            }
+        } catch (Exception $e) {
+            if (isset($db)) {
+                $db->close();
+            }
+            $resultArray = array(
+                "apiStatus" => array(
+                    "code" => "401",
+                    "message" => $e->getMessage(),
+                ),
+            );
+        }
+
+        return $resultArray;
     }
 
 
