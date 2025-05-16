@@ -324,7 +324,7 @@ class CONTACTMODEL extends APIRESPONSE
             AND c.created_by = $userId 
             AND c.id = $id
         GROUP BY c.id";
-// print_r($sql);exit;
+            // print_r($sql);exit;
 
             $result = $db->query($sql);
 
@@ -472,7 +472,7 @@ class CONTACTMODEL extends APIRESPONSE
                     throw new Exception("Invalid Group ID or Group Name mismatch: $groupId");
                 }
             }
-
+            $dateNow = date("Y-m-d H:i:s");
             // Convert dates to MySQL format (YYYY-MM-DD)
             $dob = !empty($data['otherInformation']['DOB']) ? DateTime::createFromFormat('m/d/Y', $data['otherInformation']['DOB'])->format('Y-m-d') : null;
             $anniversary = !empty($data['otherInformation']['anniversary']) ? DateTime::createFromFormat('m/d/Y', $data['otherInformation']['anniversary'])->format('Y-m-d') : null;
@@ -495,7 +495,7 @@ class CONTACTMODEL extends APIRESPONSE
           '" . $data['otherInformation']['saleAmount'] . "',
          '" . $data['language'] . "', 
          '" . $loginData['user_id'] . "', 
-         NOW())";
+        '" . $dateNow . "'";
 
             //  print_r($sql);exit;    
             if ($db->query($sql) === true) {
@@ -511,7 +511,8 @@ class CONTACTMODEL extends APIRESPONSE
                     }
 
                     // Insert into cmp_group_contact_mapping
-                    $sql = "INSERT INTO cmp_group_contact_mapping (group_id, contact_id, created_by, created_date) VALUES ('$groupId', '$contactId', '$user_id', NOW())";
+                    $sql = "INSERT INTO cmp_group_contact_mapping (group_id, contact_id, created_by, created_date) 
+                    VALUES ('$groupId', '$contactId', '$user_id', '$dateNow')";
                     if (!$db->query($sql)) {
                         throw new Exception("Error inserting into cmp_group_contact_mapping: " . $db->error);
                     }
@@ -587,13 +588,13 @@ class CONTACTMODEL extends APIRESPONSE
                 throw new Exception("Contact not found");
             }
 
-        //     // Check if Contact ID exists
-        //     $sql = "SELECT id FROM cmp_store WHERE id = '" . $data['storeId'] . "' AND status = 1 AND active_status = 1 ";
-        // //    print_r($sql);exit;
-        //     $result = mysqli_query($db, $sql);
-        //     if (!$result || mysqli_num_rows($result) === 0) {
-        //         throw new Exception('Invalid Store ID');
-        //     }
+            //     // Check if Contact ID exists
+            //     $sql = "SELECT id FROM cmp_store WHERE id = '" . $data['storeId'] . "' AND status = 1 AND active_status = 1 ";
+            // //    print_r($sql);exit;
+            //     $result = mysqli_query($db, $sql);
+            //     if (!$result || mysqli_num_rows($result) === 0) {
+            //         throw new Exception('Invalid Store ID');
+            //     }
 
             // Check if the mobile number already exists for another contact
             $sql = "SELECT id FROM cmp_contact WHERE mobile = '" . $data['mobile'] . "' AND id != '" . $data['contactId'] . "' AND status = 1 AND vendor_id = '" . $vendor_id . "'";
@@ -614,7 +615,7 @@ class CONTACTMODEL extends APIRESPONSE
                 }
             }
 
-
+            $dateNow = date("Y-m-d H:i:s");
             // Convert dates to MySQL format (YYYY-MM-DD)
             $dob = !empty($data['otherInformation']['DOB']) ? DateTime::createFromFormat('m/d/Y', $data['otherInformation']['DOB'])->format('Y-m-d') : null;
             $anniversary = !empty($data['otherInformation']['anniversary']) ? DateTime::createFromFormat('m/d/Y', $data['otherInformation']['anniversary'])->format('Y-m-d') : null;
@@ -635,7 +636,7 @@ class CONTACTMODEL extends APIRESPONSE
                     sales_amount = '" .  $data['otherInformation']['saleAmount'] . "',
                     language_code = '" . $data['language'] . "',
                     updated_by = '" . $loginData['user_id'] . "',
-                    updated_date = NOW()
+                    updated_date = '" . $dateNow . "'
                 WHERE id = '" . $data['contactId'] . "'";
             // print_r($sql);exit;
             if ($db->query($sql) === true) {
@@ -658,7 +659,7 @@ class CONTACTMODEL extends APIRESPONSE
                         unset($existingGroups[$groupId]);
                     } else {
                         // Insert new group mapping
-                        $sql = "INSERT INTO cmp_group_contact_mapping (group_id, contact_id, created_by, created_date, status) VALUES ('$groupId', '" . $data['contactId'] . "', '" . $loginData['user_id'] . "', NOW(), 1)";
+                        $sql = "INSERT INTO cmp_group_contact_mapping (group_id, contact_id, created_by, created_date, status) VALUES ('$groupId', '" . $data['contactId'] . "', '" . $loginData['user_id'] . "','$dateNow' , 1)";
                         if (!$db->query($sql)) {
                             throw new Exception("Error inserting into cmp_group_contact_mapping: " . $db->error);
                         }
@@ -929,7 +930,7 @@ class CONTACTMODEL extends APIRESPONSE
                 $rawAnniversary = trim($row['K']);
 
                 error_log("Processing row: " . json_encode($row));
-// print_r($rows);exit;
+                // print_r($rows);exit;
                 // Validate required fields
                 // if (empty($firstName) || empty($groupName) || empty($mobile)) {
                 //     throw new Exception("Invalid or missing required fields in row: " . json_encode($row));
@@ -952,7 +953,7 @@ class CONTACTMODEL extends APIRESPONSE
                 }
                 $storeRow = $storeResult->fetch_assoc();
                 $store_id = $storeRow['id'];
-
+                $dateNow = date("Y-m-d H:i:s");
                 // Handle multiple group names
                 $groupNames = array_map('trim', explode(',', $groupName));
                 $groupIds = [];
@@ -979,7 +980,7 @@ class CONTACTMODEL extends APIRESPONSE
                         $mapCheckResult = $db->query($mapCheckQuery);
                         if ($mapCheckResult->num_rows == 0) {
                             $insertGroupQuery = "INSERT INTO cmp_group_contact_mapping (group_id, contact_id, created_by, created_date) 
-                                                 VALUES ('$group_id', '$contactId', '$user_id', NOW())";
+                                                 VALUES ('$group_id', '$contactId', '$user_id', '$dateNow')";
                             if (!$db->query($insertGroupQuery)) {
                                 throw new Exception("Error inserting into cmp_group_contact_mapping: " . $db->error);
                             }
@@ -993,12 +994,12 @@ class CONTACTMODEL extends APIRESPONSE
                 $anniversary = !empty($rawAnniversary) ? DateTime::createFromFormat('d/m/Y', $rawAnniversary)->format('Y-m-d') : null;
                 $dob = $dob ? $db->real_escape_string($dob) : null;
                 $anniversary = $anniversary ? $db->real_escape_string($anniversary) : null;
-
+                $dateNow = date("Y-m-d H:i:s");
                 // Insert contact
                 $insertQuery = "INSERT INTO cmp_contact 
-                                (first_name, last_name, gender, email, mobile, language_code, date_of_birth, address, loyality, anniversary, country,sales_amount, store_id, vendor_id, created_by) 
+                                (first_name, last_name, gender, email, mobile, language_code, date_of_birth, address, loyality, anniversary, country,sales_amount, store_id, vendor_id, created_by, created_date) 
                                 VALUES 
-                                ('$firstName', '$lastName', '$gender', '$email', '$mobile', '$language', '$dob', '$address', '$loyalty', '$anniversary', '$country','$saleAmount', '$store_id', '$vendor_id', '$user_id')";
+                                ('$firstName', '$lastName', '$gender', '$email', '$mobile', '$language', '$dob', '$address', '$loyalty', '$anniversary', '$country','$saleAmount', '$store_id', '$vendor_id', '$user_id', '$dateNow')";
                 // print_r($insertQuery);
                 if ($db->query($insertQuery) === true) {
                     $contactId = $db->insert_id;
@@ -1006,9 +1007,9 @@ class CONTACTMODEL extends APIRESPONSE
                     // Insert group mappings
                     foreach ($groupIds as $group_id) {
                         $insertGroupQuery = "INSERT INTO cmp_group_contact_mapping (group_id, contact_id, created_by, created_date) 
-                                             VALUES ('$group_id', '$contactId', '$user_id', NOW())";
-                    //    print_r($insertGroupQuery);
-                       if (!$db->query($insertGroupQuery)) {
+                                             VALUES ('$group_id', '$contactId', '$user_id', '$dateNow')";
+                        //    print_r($insertGroupQuery);
+                        if (!$db->query($insertGroupQuery)) {
                             throw new Exception("Error inserting into cmp_group_contact_mapping: " . $db->error);
                         }
                     }
@@ -1327,10 +1328,10 @@ class CONTACTMODEL extends APIRESPONSE
                         // Skip this group, don't throw error
                         continue;
                     }
-
+                    $dateNow = date("Y-m-d H:i:s");
                     // Insert mapping
-                    $insertQuery = "INSERT INTO cmp_group_contact_mapping (group_id, contact_id, created_by) 
-                    VALUES ($group_id, $id, '" . $loginData['user_id'] . "')";
+                    $insertQuery = "INSERT INTO cmp_group_contact_mapping (group_id, contact_id, created_by,created_date) 
+                    VALUES ($group_id, $id, '" . $loginData['user_id'] . "','$dateNow')";
                     if (!$db->query($insertQuery)) {
                         throw new Exception("Failed to assign Contact ID $id to Group ID $group_id.");
                     }

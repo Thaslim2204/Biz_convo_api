@@ -447,8 +447,8 @@ class CAMPAIGNMODEL extends APIRESPONSE
                         $varValueId = mysqli_real_escape_string($db, $var['varValue']['varTypeId']);
                         $varValueName = mysqli_real_escape_string($db, $var['varValue']['varTypeName']);
 
-                        $sqlW = "INSERT INTO cmp_campaign_variable_mapping (campaign_id, template_id, type, variable_type_id, variable_value, group_id, created_by) 
-                             VALUES ('$campaign_id', '$template_id', '$type', '$vartypeId', '$varValueId', '$groupId', '$createdBy')";
+                        $sqlW = "INSERT INTO cmp_campaign_variable_mapping (campaign_id, template_id, type, variable_type_id, variable_value, group_id, created_by, created_date) 
+                             VALUES ('$campaign_id', '$template_id', '$type', '$vartypeId', '$varValueId', '$groupId', '$createdBy', '$date')";
 
                         if (!mysqli_query($db, $sqlW)) {
                             die("Error inserting variable mapping: " . mysqli_error($db));

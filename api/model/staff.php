@@ -127,7 +127,7 @@ class STAFFMODEL extends APIRESPONSE
                              ORDER BY u.id DESC 
                              LIMIT $start_index, $end_index";
 
-// print_r($queryService);exit;
+            // print_r($queryService);exit;
             $result = $db->query($queryService);
 
             if ($result->num_rows > 0) {
@@ -430,7 +430,7 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
 
             // Hash password
             $hashed_password = hash('sha256', hash('sha256', $data['password']));
-            $dateNow = date("Y-m-d H:i:s", strtotime('+4 hours 30 minutes'));
+            $dateNow = date("Y-m-d H:i:s");
 
             // Insert into cmp_users
             $sql = "INSERT INTO cmp_users (uid, first_name, last_name, username, email, password, mobile, created_by, created_date) 
@@ -545,7 +545,7 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
                 $hashed_password = $existingPassword; // Keep the existing password
             }
 
-            $dateNow = date("Y-m-d H:i:s", strtotime('+4 hours 30 minutes'));
+            $dateNow = date("Y-m-d H:i:s");
 
             // Update user details including password
             $updateUserQuery = "UPDATE cmp_users 
@@ -743,161 +743,162 @@ GROUP BY p.id, p.priv_name, m.id, m.name";
     // use PhpOffice\PhpSpreadsheet\IOFactory;
 
     public function importStaffFromExcel($data, $loginData)
-{
-    $resultArray = [];
-    try {
-        $db = $this->dbConnect();
+    {
+        $resultArray = [];
+        try {
+            $db = $this->dbConnect();
 
-        if (!isset($_FILES['file']) || $_FILES['file']['error'] != UPLOAD_ERR_OK) {
-            throw new Exception("No valid file uploaded.");
-        }
+            if (!isset($_FILES['file']) || $_FILES['file']['error'] != UPLOAD_ERR_OK) {
+                throw new Exception("No valid file uploaded.");
+            }
 
-        $file = $_FILES['file'];
-        $filePath = $file['tmp_name'];
-        $fileType = $file['type'];
+            $file = $_FILES['file'];
+            $filePath = $file['tmp_name'];
+            $fileType = $file['type'];
 
-        $allowedTypes = [
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'application/vnd.ms-excel'
-        ];
-        if (!in_array($fileType, $allowedTypes)) {
-            throw new Exception("Invalid file type. Please upload an Excel file.");
-        }
+            $allowedTypes = [
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/vnd.ms-excel'
+            ];
+            if (!in_array($fileType, $allowedTypes)) {
+                throw new Exception("Invalid file type. Please upload an Excel file.");
+            }
 
-        $spreadsheet = IOFactory::load($filePath);
-        $sheet = $spreadsheet->getActiveSheet();
-        $rows = $sheet->toArray(null, true, true, true);
+            $spreadsheet = IOFactory::load($filePath);
+            $sheet = $spreadsheet->getActiveSheet();
+            $rows = $sheet->toArray(null, true, true, true);
 
-        if (empty($rows) || count($rows) < 2) {
-            throw new Exception("Excel file is empty or invalid format.");
-        }
+            if (empty($rows) || count($rows) < 2) {
+                throw new Exception("Excel file is empty or invalid format.");
+            }
 
-        unset($rows[1]);
+            unset($rows[1]);
 
-        foreach ($rows as $row) {
-            $firstName = trim($row['B']);
-            $lastName = trim($row['C']);
-            $username = trim($row['D']);
-            $email = trim($row['E']);
-            $mobile = trim($row['F']);
-            $storeName = trim($row['G']);
-            $privileges = trim($row['H']);
+            foreach ($rows as $row) {
+                $firstName = trim($row['B']);
+                $lastName = trim($row['C']);
+                $username = trim($row['D']);
+                $email = trim($row['E']);
+                $mobile = trim($row['F']);
+                $storeName = trim($row['G']);
+                $privileges = trim($row['H']);
 
-            if (empty($firstName)) throw new Exception("First name is required.");
-            if (empty($email)) throw new Exception("Email is required.");
-            if (empty($storeName)) throw new Exception("Store name is required.");
+                if (empty($firstName)) throw new Exception("First name is required.");
+                if (empty($email)) throw new Exception("Email is required.");
+                if (empty($storeName)) throw new Exception("Store name is required.");
 
-            $user_id = $loginData['user_id'];
+                $user_id = $loginData['user_id'];
 
-            // Get store
-            $storeQuery = "SELECT id FROM cmp_store WHERE store_name = '$storeName' AND status = 1 AND created_by = '$user_id'";
-            $storeResult = $db->query($storeQuery);
-            if ($storeResult->num_rows === 0) throw new Exception("Store not found: $storeName");
-            $store_id = $storeResult->fetch_assoc()['id'];
+                // Get store
+                $storeQuery = "SELECT id FROM cmp_store WHERE store_name = '$storeName' AND status = 1 AND created_by = '$user_id'";
+                $storeResult = $db->query($storeQuery);
+                if ($storeResult->num_rows === 0) throw new Exception("Store not found: $storeName");
+                $store_id = $storeResult->fetch_assoc()['id'];
 
-            // Get vendor ID
-            $vendorResult = $db->query("SELECT vendor_id FROM cmp_vendor_store_mapping WHERE store_id = '$store_id' LIMIT 1");
-            if ($vendorResult->num_rows === 0) throw new Exception("Vendor ID not found for store ID: $store_id");
+                // Get vendor ID
+                $vendorResult = $db->query("SELECT vendor_id FROM cmp_vendor_store_mapping WHERE store_id = '$store_id' LIMIT 1");
+                if ($vendorResult->num_rows === 0) throw new Exception("Vendor ID not found for store ID: $store_id");
 
-            $vendorMap = $db->query("SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id AND status = 1");
-            if ($vendorMap->num_rows === 0) throw new Exception("Vendor ID not found for user.");
-            $vendor_id = $vendorMap->fetch_assoc()['vendor_id'];
+                $vendorMap = $db->query("SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id AND status = 1");
+                if ($vendorMap->num_rows === 0) throw new Exception("Vendor ID not found for user.");
+                $vendor_id = $vendorMap->fetch_assoc()['vendor_id'];
 
-            // Check or create/update staff
-            $staffCheck = $db->query("SELECT * FROM cmp_users WHERE email = '$email' AND status = 1 AND created_by = '$user_id'");
-            if ($staffCheck->num_rows === 0) {
-                $uid = bin2hex(random_bytes(8));
-                $defaultPassword = hash('sha256', hash('sha256', 'pass@123'));
-                $insertUserQuery = "INSERT INTO cmp_users (uid, first_name, last_name, username, email, mobile, password, status, created_by) 
-                                    VALUES ('$uid', '$firstName', '$lastName', '$username', '$email', '$mobile', '$defaultPassword', 1, '$user_id')";
-                $db->query($insertUserQuery);
-                $staff_id = $db->insert_id;
-            } else {
-                $existingUser = $staffCheck->fetch_assoc();
-                $staff_id = $existingUser['id'];
+                // Check or create/update staff
+                $staffCheck = $db->query("SELECT * FROM cmp_users WHERE email = '$email' AND status = 1 AND created_by = '$user_id'");
+                if ($staffCheck->num_rows === 0) {
+                    $uid = bin2hex(random_bytes(8));
+                    $dateNow = date("Y-m-d H:i:s");
+                    $defaultPassword = hash('sha256', hash('sha256', 'pass@123'));
+                    $insertUserQuery = "INSERT INTO cmp_users (uid, first_name, last_name, username, email, mobile, password, status, created_by,created_date) 
+                                    VALUES ('$uid', '$firstName', '$lastName', '$username', '$email', '$mobile', '$defaultPassword', 1, '$user_id', '$dateNow')";
+                    $db->query($insertUserQuery);
+                    $staff_id = $db->insert_id;
+                } else {
+                    $existingUser = $staffCheck->fetch_assoc();
+                    $staff_id = $existingUser['id'];
 
-                // Update only if data has changed
-                if (
-                    $existingUser['first_name'] !== $firstName ||
-                    $existingUser['last_name'] !== $lastName ||
-                    $existingUser['username'] !== $username ||
-                    $existingUser['mobile'] !== $mobile
-                ) {
-                    $updateUserQuery = "UPDATE cmp_users SET 
+                    // Update only if data has changed
+                    if (
+                        $existingUser['first_name'] !== $firstName ||
+                        $existingUser['last_name'] !== $lastName ||
+                        $existingUser['username'] !== $username ||
+                        $existingUser['mobile'] !== $mobile
+                    ) {
+                        $updateUserQuery = "UPDATE cmp_users SET 
                         first_name = '$firstName', 
                         last_name = '$lastName', 
                         username = '$username', 
                         mobile = '$mobile' 
                         WHERE id = '$staff_id'";
-                    $db->query($updateUserQuery);
+                        $db->query($updateUserQuery);
+                    }
                 }
-            }
 
-            // Role mapping
-            $roleCheck = $db->query("SELECT id FROM cmp_user_role_mapping WHERE user_id = '$staff_id' AND role_id = 4");
-            if ($roleCheck->num_rows === 0) {
-                $db->query("INSERT INTO cmp_user_role_mapping (user_id, role_id, status, created_by)
+                // Role mapping
+                $roleCheck = $db->query("SELECT id FROM cmp_user_role_mapping WHERE user_id = '$staff_id' AND role_id = 4");
+                if ($roleCheck->num_rows === 0) {
+                    $db->query("INSERT INTO cmp_user_role_mapping (user_id, role_id, status, created_by)
                             VALUES ('$staff_id', 4, 1, '$user_id')");
-            } else {
-                $db->query("UPDATE cmp_user_role_mapping SET status = 1 WHERE user_id = '$staff_id' AND role_id = 4");
-            }
-
-            // Store staff mapping
-            $storeStaffCheck = $db->query("SELECT id FROM cmp_vendor_store_staff_mapping WHERE staff_id = '$staff_id' AND store_id = '$store_id'");
-            if ($storeStaffCheck->num_rows === 0) {
-                $db->query("INSERT INTO cmp_vendor_store_staff_mapping (staff_id, store_id, vendor_id, created_by)
-                            VALUES ('$staff_id', '$store_id', '$vendor_id', '$user_id')");
-            }
-
-            // Vendor user mapping
-            $vendorUserCheck = $db->query("SELECT id FROM cmp_vendor_user_mapping WHERE vendor_id = '$vendor_id' AND user_id = '$staff_id'");
-            if ($vendorUserCheck->num_rows === 0) {
-                $db->query("INSERT INTO cmp_vendor_user_mapping (vendor_id, user_id, status, created_by)
-                            VALUES ('$vendor_id', '$staff_id', 1, '$user_id')");
-            } else {
-                $db->query("UPDATE cmp_vendor_user_mapping SET status = 1 WHERE vendor_id = '$vendor_id' AND user_id = '$staff_id'");
-            }
-
-            // Privileges
-            $privilegesList = array_filter(array_map('trim', explode(',', $privileges)));
-            foreach ($privilegesList as $privilege_name) {
-                $privilegeQuery = "SELECT id FROM cmp_privilege WHERE priv_name = '$privilege_name' AND status = 1";
-                $privilegeResult = $db->query($privilegeQuery);
-                if ($privilegeResult->num_rows === 0) {
-                    throw new Exception("Invalid privilege: $privilege_name");
-                }
-                $privilege_id = $privilegeResult->fetch_assoc()['id'];
-
-                // Check privilege mapping
-                $privilegeCheck = $db->query("SELECT id FROM cmp_user_privilege_mapping 
-                                              WHERE user_id = '$staff_id' AND privilege_id = '$privilege_id'");
-                if ($privilegeCheck->num_rows === 0) {
-                    $db->query("INSERT INTO cmp_user_privilege_mapping (user_id, privilege_id, created_by, status, active_status)
-                                VALUES ('$staff_id', '$privilege_id', '$user_id', 1, 1)");
                 } else {
-                    $db->query("UPDATE cmp_user_privilege_mapping SET status = 1, active_status = 1 
+                    $db->query("UPDATE cmp_user_role_mapping SET status = 1 WHERE user_id = '$staff_id' AND role_id = 4");
+                }
+
+                // Store staff mapping
+                $storeStaffCheck = $db->query("SELECT id FROM cmp_vendor_store_staff_mapping WHERE staff_id = '$staff_id' AND store_id = '$store_id'");
+                if ($storeStaffCheck->num_rows === 0) {
+                    $db->query("INSERT INTO cmp_vendor_store_staff_mapping (staff_id, store_id, vendor_id, created_by)
+                            VALUES ('$staff_id', '$store_id', '$vendor_id', '$user_id')");
+                }
+
+                // Vendor user mapping
+                $vendorUserCheck = $db->query("SELECT id FROM cmp_vendor_user_mapping WHERE vendor_id = '$vendor_id' AND user_id = '$staff_id'");
+                if ($vendorUserCheck->num_rows === 0) {
+                    $db->query("INSERT INTO cmp_vendor_user_mapping (vendor_id, user_id, status, created_by)
+                            VALUES ('$vendor_id', '$staff_id', 1, '$user_id')");
+                } else {
+                    $db->query("UPDATE cmp_vendor_user_mapping SET status = 1 WHERE vendor_id = '$vendor_id' AND user_id = '$staff_id'");
+                }
+
+                // Privileges
+                $privilegesList = array_filter(array_map('trim', explode(',', $privileges)));
+                foreach ($privilegesList as $privilege_name) {
+                    $privilegeQuery = "SELECT id FROM cmp_privilege WHERE priv_name = '$privilege_name' AND status = 1";
+                    $privilegeResult = $db->query($privilegeQuery);
+                    if ($privilegeResult->num_rows === 0) {
+                        throw new Exception("Invalid privilege: $privilege_name");
+                    }
+                    $privilege_id = $privilegeResult->fetch_assoc()['id'];
+
+                    // Check privilege mapping
+                    $privilegeCheck = $db->query("SELECT id FROM cmp_user_privilege_mapping 
+                                              WHERE user_id = '$staff_id' AND privilege_id = '$privilege_id'");
+                    if ($privilegeCheck->num_rows === 0) {
+                        $db->query("INSERT INTO cmp_user_privilege_mapping (user_id, privilege_id, created_by, status, active_status)
+                                VALUES ('$staff_id', '$privilege_id', '$user_id', 1, 1)");
+                    } else {
+                        $db->query("UPDATE cmp_user_privilege_mapping SET status = 1, active_status = 1 
                                 WHERE user_id = '$staff_id' AND privilege_id = '$privilege_id'");
+                    }
                 }
             }
+
+            $resultArray = [
+                "apiStatus" => [
+                    "code" => "200",
+                    "message" => "Excel file uploaded and processed successfully."
+                ]
+            ];
+        } catch (Exception $e) {
+            $resultArray = [
+                "apiStatus" => [
+                    "code" => "401",
+                    "message" => $e->getMessage()
+                ]
+            ];
         }
 
-        $resultArray = [
-            "apiStatus" => [
-                "code" => "200",
-                "message" => "Excel file uploaded and processed successfully."
-            ]
-        ];
-    } catch (Exception $e) {
-        $resultArray = [
-            "apiStatus" => [
-                "code" => "401",
-                "message" => $e->getMessage()
-            ]
-        ];
+        return $resultArray;
     }
-
-    return $resultArray;
-}
 
 
 

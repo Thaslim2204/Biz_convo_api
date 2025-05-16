@@ -263,7 +263,7 @@ class GROUPMODEL extends APIRESPONSE
    
         ";
             // print_r($queryService);exit;
-                 
+
 
             $result = $db->query($queryService);
             $groupData = [];
@@ -533,10 +533,10 @@ class GROUPMODEL extends APIRESPONSE
             }
 
             $uid = bin2hex(random_bytes(8));
-
+            $dateNow = date("Y-m-d H:i:s");
             // Insert into cmp_store
-            $insertGroupQuery = "INSERT INTO cmp_group_contact (uid, group_name, description, vendor_id, created_by)
-            VALUES ('$uid', '" . $data['groupName'] . "', '" . $data['description'] . "', '$vendor_id', '" . $loginData['user_id'] . "')";
+            $insertGroupQuery = "INSERT INTO cmp_group_contact (uid, group_name, description, vendor_id, created_by,created_date)
+            VALUES ('$uid', '" . $data['groupName'] . "', '" . $data['description'] . "', '$vendor_id', '" . $loginData['user_id'] . "', '$dateNow')";
             // print_r($insertGroupQuery);exit;
             if ($db->query($insertGroupQuery) === true) {
 
@@ -1263,7 +1263,7 @@ class GROUPMODEL extends APIRESPONSE
 
             // Query to get Group details based on user_id -> vendor_id -> store_id
             $queryService = "SELECT id, group_name FROM cmp_group_contact WHERE status = 1 AND active_status = 1 AND vendor_id = " . $this->getVendorIdByUserId($loginData) . " ORDER BY id DESC";
-// print_r($queryService);exit;
+            // print_r($queryService);exit;
             $result = $db->query($queryService);
 
             if (!$result) {

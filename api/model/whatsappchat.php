@@ -322,10 +322,10 @@ class WHATSAPPCHATMODEL extends APIRESPONSE
                     $mediaLink = $data[$messageType]['link'] ?? '';
                     $mediaid = $data[$messageType]['id'] ?? '';
                 }
-
+                $dateNow = date("Y-m-d H:i:s");
                 $insertmsgquery = "INSERT INTO `cmp_whatsapp_messages` 
-                    (agent, agent_contact, vendor_id, wam_id, message_type, message_body,media_id, media_link, message_status, created_by) 
-                    VALUES ('bot', '$agentContact', '$vendor_id', '$wamId', '$messageType', '$messageBody','$mediaid', '$relativePath', '$messageStatus', '$createdBy')";
+                    (agent, agent_contact, vendor_id, wam_id, message_type, message_body,media_id, media_link, message_status, created_by,created_date) 
+                    VALUES ('bot', '$agentContact', '$vendor_id', '$wamId', '$messageType', '$messageBody','$mediaid', '$relativePath', '$messageStatus', '$createdBy', '$dateNow')";
                 // print_r($insertmsgquery);exit;
                 $conn = $this->dbConnect();
                 $result11 = $conn->query($insertmsgquery);

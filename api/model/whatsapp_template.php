@@ -178,6 +178,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
 
                 if ($request["template_id"]) {
                     //Update query
+                    $dateNow = date("Y-m-d H:i:s");
                     $sql = "UPDATE cmp_whatsapp_templates 
                     SET 
                         vendor_id = '" . $vendor_id . "',
@@ -186,17 +187,17 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                         body_data = '" . mysqli_real_escape_string($db, json_encode($body)) . "',
                         media_id = '" . $mediaId . "',
                         updated_by = '" . $loginData['user_id'] . "',
-                        updated_date = NOW()
+                        updated_date = '" . $dateNow . "',
                         WHERE template_id = '" . $template_id . "'";
 
                     $db->query($sql);
                 } else {
                     //Insertion query
                     $sql = "INSERT INTO cmp_whatsapp_templates 
-                        (uid, vendor_id, template_id, template_name, category, language, body_data, media_id, template_status, created_by) 
+                        (uid, vendor_id, template_id, template_name, category, language, body_data, media_id, template_status, created_by,created_date) 
                         VALUES 
                         ('" . $uid . "','" . $vendor_id . "', '" . $template_id . "','" . mysqli_real_escape_string($db, $request["name"]) . "', '" . mysqli_real_escape_string($db, $request["category"]) . "', 
-                        '" . mysqli_real_escape_string($db, $request["language"]) . "', '" . mysqli_real_escape_string($db, json_encode($body)) . "', '" . $mediaId . "' , '" . $template_status . "', '" . $loginData['user_id'] . "'
+                        '" . mysqli_real_escape_string($db, $request["language"]) . "', '" . mysqli_real_escape_string($db, json_encode($body)) . "', '" . $mediaId . "' , '" . $template_status . "', '" . $loginData['user_id'] . "', '" . date("Y-m-d H:i:s") . "'
                         )";
 
                     $db->query($sql);
@@ -362,10 +363,10 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                     // Exists: update status and updated_date
                     $template['created_date'] = $dbTemplateDates[$template_id]['created_date'];
                     $template['updated_date'] = $dbTemplateDates[$template_id]['updated_date'];
-
+                    $dateNow = date("Y-m-d H:i:s");
                     $updateSql = "UPDATE cmp_whatsapp_templates
                                   SET template_status = '$status', media_url = '" . $imgUrl . "',
-                                  updated_date = NOW()
+                                  updated_date = '$dateNow', updated_by = '" . $loginData['user_id'] . "',
                                   WHERE
                                    template_id = '$template_id' and status = 1";
                     $db->query($updateSql);
@@ -373,8 +374,8 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                     // Not exists: insert new record
                     $created_date = date('Y-m-d H:i:s');
                     $insertSql = "INSERT INTO cmp_whatsapp_templates
-                        (uid, vendor_id, template_id, media_url, template_name, category, language, body_data,  template_status, created_by)
-                        VALUES ('$uid','$vendor_id','$template_id','" . $imgUrl . "','$templateName' ,'$templateCategory','$templatelanguage','" . mysqli_real_escape_string($db, $templatedData) . "', '$status', '" . $loginData['user_id'] . "')";
+                        (uid, vendor_id, template_id, media_url, template_name, category, language, body_data,  template_status, created_by, created_date)
+                        VALUES ('$uid','$vendor_id','$template_id','" . $imgUrl . "','$templateName' ,'$templateCategory','$templatelanguage','" . mysqli_real_escape_string($db, $templatedData) . "', '$status', '" . $loginData['user_id'] . "', '$created_date')";
                     // print_r($insertSql);exit;
                     $db->query($insertSql);
 

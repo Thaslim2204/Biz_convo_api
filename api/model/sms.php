@@ -385,8 +385,9 @@ class SMSMODEL extends APIRESPONSE
                     } else if ($res['status'] == "fail") {
                         $msgStatus = "failed";
                     }
-                    $sql = "INSERT into cmp_sms_messages (campaign_id,template_id,sender_id,mobile,vendor_id,msg_id, reason, message_status, created_by) 
-                    values ('$campaignid','$templateId','$senderId','" . $res['mobileno'] . "','$vendor_id','" . $messageId . "','" . $res['reason'] . "','" . $msgStatus . "','" . $loginData['user_id'] . "')";
+                    $dateNow = date("Y-m-d H:i:s");
+                    $sql = "INSERT into cmp_sms_messages (campaign_id,template_id,sender_id,mobile,vendor_id,msg_id, reason, message_status, created_by, created_date) 
+                    values ('$campaignid','$templateId','$senderId','" . $res['mobileno'] . "','$vendor_id','" . $messageId . "','" . $res['reason'] . "','" . $msgStatus . "','" . $loginData['user_id'] . "','$dateNow')";
                     //    print_r($sql);exit;
 
 
@@ -570,7 +571,7 @@ class SMSMODEL extends APIRESPONSE
                 "API Key"   => $data['apiKey'],
             );
             $this->validateInputDetails($validationData);
-
+            $dateNow = date("Y-m-d H:i:s");
             // 3. Check if record exists
             $checkSql = "SELECT id FROM cmp_vendor_sms_credentials WHERE vendor_id = $vendor_id";
             $checkResult = $db->query($checkSql);
@@ -582,7 +583,7 @@ class SMSMODEL extends APIRESPONSE
                               entity_id = '" . $data['entityId'] . "',
                               api_key = '" . $data['apiKey'] . "',
                               updated_by = '$user_id',
-                              updated_date = NOW()
+                              updated_date = '$dateNow'
                           WHERE vendor_id = $vendor_id";
 
                 if ($db->query($updateSql) === true) {
@@ -597,11 +598,12 @@ class SMSMODEL extends APIRESPONSE
                     throw new Exception("Error updating SMS credentials: " . $db->error);
                 }
             } else {
+                $dateNow = date("Y-m-d H:i:s");
                 // Record does not exist: perform insert
                 $insertSql = "INSERT INTO cmp_vendor_sms_credentials 
                           (vendor_id, sender_id, entity_id, api_key, created_by, created_date, status)
                           VALUES 
-                          ('$vendor_id', '" . $data['sender_id'] . "', '" . $data['entity_id'] . "', '" . $data['api_key'] . "', '$user_id', NOW(), 1)";
+                          ('$vendor_id', '" . $data['sender_id'] . "', '" . $data['entity_id'] . "', '" . $data['api_key'] . "', '$user_id', '$dateNow', 1)";
 
                 if ($db->query($insertSql) === true) {
                     $db->close();
@@ -694,29 +696,29 @@ class SMSMODEL extends APIRESPONSE
     {
         try {
             $db = $this->dbConnect();
- 
+
             $user_id = $loginData['user_id'];
             $test_contact = $data['test_contact'];
- 
+
             // 1. Get vendor_id from cmp_vendor_user_mapping
             $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id";
             $result = $db->query($sql);
             $vendor_id = $result->fetch_assoc()['vendor_id'];
- 
+
             if (empty($vendor_id)) {
                 throw new Exception("Vendor ID not found for user ID: $user_id");
             }
- 
+
             if (empty($test_contact)) {
                 throw new Exception("Test contact is required");
             }
- 
+
             // 3. Check if record already exists in cmp_vendor_sms_credentials
             $checkSql = "SELECT id FROM cmp_vendor_sms_credentials WHERE vendor_id = $vendor_id and status = 1";
             $checkResult = $db->query($checkSql);
- 
+
             if ($checkResult->num_rows > 0) {
- 
+
                 $date = date("Y-m-d H:i:s");
                 $insertSql = "UPDATE cmp_vendor_sms_credentials SET
                                 test_contact = '" . $test_contact . "',
@@ -724,13 +726,14 @@ class SMSMODEL extends APIRESPONSE
                                 updated_date = '" . $date . "'
                                 where vendor_id = '" . $vendor_id . "'";
             } else {
+                $dateNow = date("Y-m-d H:i:s");
                 // 4. Insert new SMS credentials
                 $insertSql = "INSERT INTO cmp_vendor_sms_credentials
                 (vendor_id, test_contact, created_by, created_date, status)
                 VALUES
-                ('$vendor_id', '" . $test_contact . "', '$user_id', NOW(), 1)";
+                ('$vendor_id', '" . $test_contact . "', '$user_id', '$dateNow', 1)";
             }
- 
+
             if ($db->query($insertSql) === true) {
                 $db->close();
                 $resultArray = array(
@@ -753,7 +756,7 @@ class SMSMODEL extends APIRESPONSE
                 ),
             );
         }
- 
+
         return $resultArray;
     }
 

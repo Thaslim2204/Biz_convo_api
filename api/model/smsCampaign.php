@@ -609,9 +609,9 @@ class SMSCampaignMODEL extends APIRESPONSE
             // $restrictLangCode = mysqli_real_escape_string($db, $data['restrictLangCode'] ?? '');
             $sendNum = mysqli_real_escape_string($db, $data['SendNum']);
             $createdBy = mysqli_real_escape_string($db, $loginData['user_id']);
-
-            $sql = "INSERT INTO cmp_sms_campaign (group_id, template_id, title,timezone, schedule_at, send_status, send_num, created_by) 
-                VALUES ('$groupId', '$template_id', '$title',  '$timezone_zoneName', '$scheduleAt', 'Scheduled', '$sendNum',  '$createdBy')";
+            $dateNow = date("Y-m-d H:i:s");
+            $sql = "INSERT INTO cmp_sms_campaign (group_id, template_id, title,timezone, schedule_at, send_status, send_num, created_by, created_date) 
+                VALUES ('$groupId', '$template_id', '$title',  '$timezone_zoneName', '$scheduleAt', 'Scheduled', '$sendNum',  '$createdBy', '$dateNow')";
             // print_r($sql);
             // exit;
             if (!mysqli_query($db, $sql)) {
@@ -647,8 +647,9 @@ class SMSCampaignMODEL extends APIRESPONSE
 
                 foreach ($contacts as $contact) {
                     //insert the queue for the sms camapaign queue 
+                    $dateNow = date("Y-m-d H:i:s");
                     $insertqueue = "INSERT INTO cmp_sms_messages (vendor_id,campaign_id, campaign_schedule,template_id,sender_id,mobile, template_name, message_status,created_by, created_date)
-                 VALUES ('$vendor_id','$campaign_id','1','$template_id', '" . $data['senderId'] . "','" . $contact['mobile'] . "', '" . $data['templateName'] . "', 'queued','" . $loginData['user_id'] . "', NOW())";
+                 VALUES ('$vendor_id','$campaign_id','1','$template_id', '" . $data['senderId'] . "','" . $contact['mobile'] . "', '" . $data['templateName'] . "', 'queued','" . $loginData['user_id'] . "', '$dateNow')";
                     if (!mysqli_query($db, $insertqueue)) {
                         throw new Exception("Error inserting into queue: " . mysqli_error($db));
                     }
@@ -691,9 +692,9 @@ class SMSCampaignMODEL extends APIRESPONSE
                             $vartypeId = mysqli_real_escape_string($db, $var['varName']);
                             $varValueId = mysqli_real_escape_string($db, $var['varValue']['varTypeId']);
                             $varValueName = mysqli_real_escape_string($db, $var['varValue']['varTypeName']);
-
-                            $sqlW = "INSERT INTO cmp_sms_campaign_variable_mapping (campaign_id, template_id, type, variable_type_id, variable_value, group_id, created_by) 
-                                 VALUES ('$campaign_id', '$template_id', '$type', '$vartypeId', '$varValueId', '$groupId', '$createdBy')";
+                            $dateNow = date("Y-m-d H:i:s");
+                            $sqlW = "INSERT INTO cmp_sms_campaign_variable_mapping (campaign_id, template_id, type, variable_type_id, variable_value, group_id, created_by,created_date) 
+                                 VALUES ('$campaign_id', '$template_id', '$type', '$vartypeId', '$varValueId', '$groupId', '$createdBy', '$dateNow')";
 
                             if (!mysqli_query($db, $sqlW)) {
                                 throw new Exception("Error inserting variable mapping: " . mysqli_error($db));

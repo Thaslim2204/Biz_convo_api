@@ -272,66 +272,66 @@ class BOTREPLYMODEL extends APIRESPONSE
             if (!isset($_FILES['file']) || empty($_FILES['file']['name'])) {
                 throw new Exception("No file uploaded or file name is empty.");
             }
-    
+
             $file = $_FILES['file'];
             $fileName = $file['name'];
             $tempPath = $file['tmp_name'];
             $fileSize = $file['size'];
             $fileType = mime_content_type($tempPath); // More reliable type check
-    
+
             $db = $this->dbConnect();
-    
+
             // Define the base upload path
             $basePath = 'uploads/botmedia/';
             $uploadPath = '';
-    
+
             // Prepare the file extension
             $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-    
+
             // Allowed types for validation
             $allowedImages = ['jpg', 'jpeg', 'png'];
             $allowedVideos = ['mp4', 'mov', 'avi', 'mkv'];
             $allowedDocuments = ['pdf', 'doc', 'docx', 'xls', 'xlsx'];
-    
+
             // Determine file category by mime type and extension
             if (strpos($fileType, 'image') !== false && in_array($fileExt, $allowedImages)) {
                 $uploadPath = $basePath . 'images/';
             } elseif (strpos($fileType, 'video') !== false && in_array($fileExt, $allowedVideos)) {
                 $uploadPath = $basePath . 'videos/';
             } elseif (
-                (strpos($fileType, 'application/pdf') !== false || 
-                 strpos($fileType, 'application/msword') !== false || 
-                 strpos($fileType, 'application/vnd.openxmlformats-officedocument') !== false) 
-                 && in_array($fileExt, $allowedDocuments)
+                (strpos($fileType, 'application/pdf') !== false ||
+                    strpos($fileType, 'application/msword') !== false ||
+                    strpos($fileType, 'application/vnd.openxmlformats-officedocument') !== false)
+                && in_array($fileExt, $allowedDocuments)
             ) {
                 $uploadPath = $basePath . 'documents/';
             } else {
                 throw new Exception("Unsupported or mismatched file type.");
             }
-    
+
             // Create directory if not exists
             if (!is_dir($uploadPath)) {
                 mkdir($uploadPath, 0777, true);
             }
-    
+
             // Validate file size (limit 10MB)
             if ($fileSize > 10000000) {
                 throw new Exception("File is too large! Maximum allowed size is 10 MB.");
             }
-    
+
             // Clean and rename file
             $baseName = pathinfo($fileName, PATHINFO_FILENAME);
             $timeStamp = date('ymdHis');
             $cleanName = preg_replace('/\s+/', '', $baseName);
             $alteredName = $cleanName . "_" . $timeStamp . "." . $fileExt;
-    
+
             $finalPath = $uploadPath . $alteredName;
-    
+
             // Move the uploaded file
             if (!move_uploaded_file($tempPath, $finalPath)) {
                 throw new Exception("Failed to move uploaded file.");
             }
-    
+
             // Success Response
             $responseData = array(
                 "apiStatus" => array(
@@ -344,7 +344,7 @@ class BOTREPLYMODEL extends APIRESPONSE
                     "Path" => $finalPath,
                 ),
             );
-    
+
             return $responseData;
         } catch (Exception $e) {
             return array(
@@ -355,7 +355,7 @@ class BOTREPLYMODEL extends APIRESPONSE
             );
         }
     }
-    
+
 
     public function getTriggerTypeDropdown($data, $loginData)
     {
@@ -431,7 +431,7 @@ class BOTREPLYMODEL extends APIRESPONSE
 
             // Validate trigger type
             $triggerTypeName = $botAction['trigger']['type'];
-            $botReplyQuery = "SELECT id FROM cmp_bot_trigger_type WHERE name = '" . $triggerTypeName . "' AND vendor_id=".$vendor_id." AND status = 1";
+            $botReplyQuery = "SELECT id FROM cmp_bot_trigger_type WHERE name = '" . $triggerTypeName . "' AND vendor_id=" . $vendor_id . " AND status = 1";
             $botReplyResult = $db->query($botReplyQuery);
             if ($botReplyResult->num_rows === 0) {
                 throw new Exception("Invalid trigger type: " . $triggerTypeName);
@@ -444,7 +444,7 @@ class BOTREPLYMODEL extends APIRESPONSE
             $subType = $response['sub_type'] ?? ''; // For interactive messages
             $messageType = $mainType === 'interactive' && $subType ? "{$mainType}_{$subType}" : $mainType;
 
-            $validTypes = ['text', 'image', 'video','document','interactive_reply', 'interactive_cta', 'interactive_list'];
+            $validTypes = ['text', 'image', 'video', 'document', 'interactive_reply', 'interactive_cta', 'interactive_list'];
             if (!in_array($messageType, $validTypes)) {
                 throw new Exception("Invalid message type: " . $messageType);
             }
@@ -507,11 +507,11 @@ class BOTREPLYMODEL extends APIRESPONSE
             $name = $db->real_escape_string($botAction['botName']);
             $intent = $db->real_escape_string(json_encode($botAction['intents']));
             $messageBody = $db->real_escape_string(json_encode($botAction['responses']));
-
+            $dateNow = date("Y-m-d H:i:s");
             $insertStoreQuery = "INSERT INTO cmp_bot_replies 
-                (vendor_id, trigger_type_id, name, intent, message_type, message_body, created_by)
+                (vendor_id, trigger_type_id, name, intent, message_type, message_body, created_by, created_date)
                 VALUES 
-                ('$vendor_id', '$triggerType', '$name', '$intent', '$messageType', '$messageBody', '$user_id')";
+                ('$vendor_id', '$triggerType', '$name', '$intent', '$messageType', '$messageBody', '$user_id', '$dateNow')";
 
             if ($db->query($insertStoreQuery) === true) {
                 $db->close();
@@ -542,31 +542,31 @@ class BOTREPLYMODEL extends APIRESPONSE
         $resultArray = array();
         try {
             $db = $this->dbConnect();
-    $botReplyId = $data['id'];
+            $botReplyId = $data['id'];
             // Validate input
             if (empty($botReplyId)) {
                 throw new Exception("Bot Reply ID is required for duplication.");
             }
-    
+
             $user_id = $loginData['user_id'];
-    
+
             // Fetch the existing bot reply
             $fetchQuery = "SELECT * FROM cmp_bot_replies WHERE id = '$botReplyId'";
             $result = $db->query($fetchQuery);
-    
+
             if ($result->num_rows === 0) {
                 throw new Exception("Bot Reply not found for the given ID.");
             }
-    
+
             $botData = $result->fetch_assoc();
-    
+
             // Generate new name with random number
             $randomNumber = rand(1000, 9999);
             $newName = $botData['name'] . " " . $randomNumber;
-    
+            $dateNow = date("Y-m-d H:i:s");
             // Insert duplicated bot with new name
             $insertQuery = "INSERT INTO cmp_bot_replies 
-                (vendor_id, trigger_type_id, name, intent, message_type, message_body, created_by)
+                (vendor_id, trigger_type_id, name, intent, message_type, message_body, created_by,created_date)
                 VALUES 
                 (
                     '{$botData['vendor_id']}',
@@ -575,9 +575,10 @@ class BOTREPLYMODEL extends APIRESPONSE
                     '" . $db->real_escape_string($botData['intent']) . "',
                     '{$botData['message_type']}',
                     '" . $db->real_escape_string($botData['message_body']) . "',
-                    '$user_id'
+                    '$user_id',
+                    '{$dateNow}'
                 )";
-    
+
             if ($db->query($insertQuery) === true) {
                 $db->close();
                 $resultArray = array(
@@ -602,7 +603,7 @@ class BOTREPLYMODEL extends APIRESPONSE
         }
         return $resultArray;
     }
-    
+
 
 
 
@@ -655,7 +656,7 @@ class BOTREPLYMODEL extends APIRESPONSE
             $subType = $response['sub_type'] ?? '';
             $messageType = $mainType === 'interactive' && $subType ? "{$mainType}_{$subType}" : $mainType;
 
-            $validTypes = ['text', 'image','video','document', 'interactive_reply', 'interactive_cta', 'interactive_list'];
+            $validTypes = ['text', 'image', 'video', 'document', 'interactive_reply', 'interactive_cta', 'interactive_list'];
             if (!in_array($messageType, $validTypes)) {
                 throw new Exception("Invalid message type: " . $messageType);
             }

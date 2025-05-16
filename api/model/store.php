@@ -322,10 +322,10 @@ class STOREMODEL extends APIRESPONSE
             }
 
             $uid = bin2hex(random_bytes(8));
-
+            $dateNow = date("Y-m-d H:i:s");
             // Insert into cmp_store
-            $insertStoreQuery = "INSERT INTO cmp_store (uid, store_name, address_line1,address_line2,dist,state,pincode, phone, email, created_by)
-                  VALUES ('" . $uid . "', '" . $data['storeName'] . "', '" . $data['addressLine1'] . "', '" . $data['addressLine2'] . "', '" . $data['district'] . "', '" . $data['state'] . "', '" . $data['pincode'] . "', '" . $data['phone'] . "', '" . $data['email'] . "', '" . $loginData['user_id'] . "')";
+            $insertStoreQuery = "INSERT INTO cmp_store (uid, store_name, address_line1,address_line2,dist,state,pincode, phone, email, created_by,created_date)
+                  VALUES ('" . $uid . "', '" . $data['storeName'] . "', '" . $data['addressLine1'] . "', '" . $data['addressLine2'] . "', '" . $data['district'] . "', '" . $data['state'] . "', '" . $data['pincode'] . "', '" . $data['phone'] . "', '" . $data['email'] . "', '" . $loginData['user_id'] . "', '" . $dateNow . "')";
             // print_r($insertStoreQuery);exit;
             if ($db->query($insertStoreQuery) === true) {
                 $store_id = $db->insert_id;
@@ -498,7 +498,7 @@ class STOREMODEL extends APIRESPONSE
             $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_store WHERE id = $id AND status = 1";
             $result = $db->query($checkIdQuery);
             $rowCount = $result->fetch_assoc()['count'];
-// print_r($checkIdQuery);exit;
+            // print_r($checkIdQuery);exit;
             if ($rowCount == 0) {
                 $db->close();
                 return array(
@@ -779,7 +779,7 @@ class STOREMODEL extends APIRESPONSE
                 if ($storeResult->num_rows > 0) {
                     $storeRow = $storeResult->fetch_assoc();
                     $store_id = $storeRow['id'];
-
+                    $dateNow = date("Y-m-d H:i:s");
                     // UPDATE existing store with new values
                     $updateStoreQuery = "UPDATE cmp_store SET 
                             address_line1 = '$address1',
@@ -790,7 +790,7 @@ class STOREMODEL extends APIRESPONSE
                             phone = '$phone',
                             email = '$email',
                             updated_by = '$user_id',
-                            updated_date = NOW()
+                            updated_date = '$dateNow'
                          WHERE id = '$store_id'";
                     if (!$db->query($updateStoreQuery)) {
                         throw new Exception("Error updating store: " . $db->error);
