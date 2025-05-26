@@ -33,7 +33,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] == "deactive") {
                     $result = $this->campaigndeactive($data, $loginData);
                     return $result;
-                } elseif ($urlParam[1] === 'exporttoexcel') {
+               } elseif ($urlParam[1] === 'exporttoexcel') {
                     if ($urlParam[2] === 'queue') {
                         $result = $this->exportwhatsappQueuetoexcel($data, $loginData, $urlParam);
                         return $result;
@@ -43,6 +43,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
                     } else {
                         throw new Exception("Unable to proceed your request!");
                     }
+                    
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -233,7 +234,6 @@ class CAMPAIGNMODEL extends APIRESPONSE
     public function getcampaign($data, $loginData)
     {
         try {
-            
             $id = $data[2];
             if (empty($id)) {
                 throw new Exception("Bad request");
@@ -404,10 +404,10 @@ class CAMPAIGNMODEL extends APIRESPONSE
             $restrictLangCode = mysqli_real_escape_string($db, $data['restrictLangCode']);
             $sendNum = mysqli_real_escape_string($db, $data['SendNum']);
             $createdBy = mysqli_real_escape_string($db, $loginData['user_id']);
-            $date = date("Y-m-d H:i:s");
-            $sql = "INSERT INTO cmp_campaign (group_id, template_id, title, restrictLangCode, timezone, schedule_at, send_status,send_num,media_id, created_by,created_date) 
-        VALUES ('$groupId', '$template_id', '$title', '$restrictLangCode', '$timezone_zoneName', '$scheduleAt','Scheduled' ,'$sendNum','$mediaId', '$createdBy','$date')";
-// print_r($sql);exit;
+
+            $sql = "INSERT INTO cmp_campaign (group_id, template_id, title, restrictLangCode, timezone, schedule_at, send_status,send_num,media_id, created_by) 
+        VALUES ('$groupId', '$template_id', '$title', '$restrictLangCode', '$timezone_zoneName', '$scheduleAt','Scheduled' ,'$sendNum','$mediaId', '$createdBy')";
+
             if (!mysqli_query($db, $sql)) {
                 throw new Exception("Error inserting campaign: " . mysqli_error($db));
             }
@@ -447,8 +447,8 @@ class CAMPAIGNMODEL extends APIRESPONSE
                         $varValueId = mysqli_real_escape_string($db, $var['varValue']['varTypeId']);
                         $varValueName = mysqli_real_escape_string($db, $var['varValue']['varTypeName']);
 
-                        $sqlW = "INSERT INTO cmp_campaign_variable_mapping (campaign_id, template_id, type, variable_type_id, variable_value, group_id, created_by, created_date) 
-                             VALUES ('$campaign_id', '$template_id', '$type', '$vartypeId', '$varValueId', '$groupId', '$createdBy', '$date')";
+                        $sqlW = "INSERT INTO cmp_campaign_variable_mapping (campaign_id, template_id, type, variable_type_id, variable_value, group_id, created_by) 
+                             VALUES ('$campaign_id', '$template_id', '$type', '$vartypeId', '$varValueId', '$groupId', '$createdBy')";
 
                         if (!mysqli_query($db, $sqlW)) {
                             die("Error inserting variable mapping: " . mysqli_error($db));
@@ -954,7 +954,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
 
 
 
-    public function exportwhatsappQueuetoexcel($data, $loginData, $urlParam)
+     public function exportwhatsappQueuetoexcel($data, $loginData, $urlParam)
     {
         try {
 
@@ -1007,10 +1007,10 @@ class CAMPAIGNMODEL extends APIRESPONSE
                 $query .= " AND wmq.message_status != 'queued'";
                 $message = "executed";
             }
-
+           
             $query .= " ORDER BY wmq.created_date DESC";
 
-
+           
             // print_r($query);exit;
             $result = $db->query($query);
 
@@ -1023,44 +1023,44 @@ class CAMPAIGNMODEL extends APIRESPONSE
                 ];
             }
 
-            // Status mapping
-            $statusMap = [
-                'queued' => 'Queued',
-                'sent' => 'Sent',
-                'failed' => 'Failed',
-                'delivered' => 'Delivered',
-                'undelivered' => 'Failed',
-                'expired' => 'Failed'
-            ];
+           // Status mapping
+        $statusMap = [
+            'queued' => 'Queued',
+            'sent' => 'Sent',
+            'failed' => 'Failed',
+            'delivered' => 'Delivered',
+            'undelivered' => 'Failed',
+            'expired' => 'Failed'
+        ];
 
-            // Fill data
-            $rowIndex = 2;
-            $sno = 1;
-            while ($row = $result->fetch_assoc()) {
-                $messageStatus = $statusMap[$row['message_status']] ?? ucfirst($row['message_status']);
+        // Fill data
+        $rowIndex = 2;
+        $sno = 1;
+        while ($row = $result->fetch_assoc()) {
+            $messageStatus = $statusMap[$row['message_status']] ?? ucfirst($row['message_status']);
 
-                $sheet->setCellValue('A' . $rowIndex, $sno);
-                $sheet->setCellValue('B' . $rowIndex, $row['first_name']);
-                $sheet->setCellValue('C' . $rowIndex, $row['last_name']);
-                $sheet->setCellValue('D' . $rowIndex, $row['phone_number']);
-                $sheet->setCellValue('E' . $rowIndex, $row['template_name']);
-                $sheet->setCellValue('F' . $rowIndex, $messageStatus);
-                $sheet->setCellValue('G' . $rowIndex, $row['updated_date']);
-                $sheet->setCellValue('H' . $rowIndex, $row['error_message']);
+            $sheet->setCellValue('A' . $rowIndex, $sno);
+            $sheet->setCellValue('B' . $rowIndex, $row['first_name']);
+            $sheet->setCellValue('C' . $rowIndex, $row['last_name']);
+            $sheet->setCellValue('D' . $rowIndex, $row['phone_number']);
+            $sheet->setCellValue('E' . $rowIndex, $row['template_name']);
+            $sheet->setCellValue('F' . $rowIndex, $messageStatus);
+            $sheet->setCellValue('G' . $rowIndex, $row['updated_date']);
+            $sheet->setCellValue('H' . $rowIndex, $row['error_message']);
 
-                $rowIndex++;
-                $sno++;
-            }
+            $rowIndex++;
+            $sno++;
+        }
 
-            // Output Excel file to browser
-            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-            header('Content-Disposition: attachment; filename="WhatsApp_' . $message . '_data_' . date('Ymd_His') . '.xlsx"');
-            header('Cache-Control: max-age=0');
+        // Output Excel file to browser
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="WhatsApp_' . $message . '_data_' . date('Ymd_His') . '.xlsx"');
+        header('Cache-Control: max-age=0');
 
-            $writer = new Xlsx($spreadsheet);
-            $writer->save('php://output'); // Send file to browser
+        $writer = new Xlsx($spreadsheet);
+        $writer->save('php://output'); // Send file to browser
 
-            exit;
+        exit;
         } catch (Exception $e) {
             return [
                 "apiStatus" => [
@@ -1070,7 +1070,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
             ];
         }
     }
-
+        
     //export the data to excel 
     // public function exportStoreToExcel($data, $loginData)
     // {
@@ -1217,7 +1217,7 @@ class CAMPAIGNMODEL extends APIRESPONSE
      JOIN cmp_whatsapp_templates AS wt ON wt.id = c.template_id
      WHERE c.status = 1  AND wt.status = 1 AND c.active_status=0
      AND wt.vendor_id = " . $this->getVendorIdByUserId($loginData);
-            // print_r($countQuery);exit;
+// print_r($countQuery);exit;
             $countResult = $db->query($countQuery);
             $countRow = $countResult->fetch_assoc();
             $recordCount = $countRow['totalCount']; // Total record count

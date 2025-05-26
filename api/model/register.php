@@ -97,8 +97,8 @@ class REGISTERMODEL extends APIRESPONSE
                     $vendorId = mysqli_insert_id($db);
 
                     // Insert into cmp_vendor_mapping table
-                    $insertMappingQuery = "INSERT INTO cmp_vendor_user_mapping (vendor_id, user_id,created_by,created_date)
-                   VALUES ('" . $vendorId . "', '" . $lastInsertedId . "','" . $lastInsertedId . "', '" . $createdDate . "')";
+                    $insertMappingQuery = "INSERT INTO cmp_vendor_user_mapping (vendor_id, user_id,created_by)
+                   VALUES ('" . $vendorId . "', '" . $lastInsertedId . "','" . $lastInsertedId . "')";
                     if (!$db->query($insertMappingQuery)) {
                         throw new Exception("Failed to insert vendor mapping: " . $db->error);
                     }

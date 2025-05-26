@@ -332,17 +332,15 @@ class SMSCampaignMODEL extends APIRESPONSE
                 SUM(message_status = 'queued') AS awaited
             FROM cmp_sms_messages
             WHERE vendor_id = '$vendorId'
-            
         ";
 
             if ($data['campaignId'] != "") {
                 $statusQuery .= " AND campaign_id = '" . $data['campaignId'] . "'";
             }
             if ($fromDate != "" && $toDate != "") {
-                $statusQuery .= " AND DATE(created_date) BETWEEN '$fromDate' AND '$toDate' 
-                GROUP BY DATE(created_date)
-                ORDER BY DATE(created_date) ASC";
+                $statusQuery .= " AND DATE(created_date) BETWEEN '$fromDate' AND '$toDate'";
             }
+            $statusQuery .= " GROUP BY DATE(created_date) ORDER BY DATE(created_date) ASC";
             if ($start_index && $end_index) {
                 $statusQuery .= " LIMIT $start_index, $end_index";
             }
@@ -609,9 +607,9 @@ class SMSCampaignMODEL extends APIRESPONSE
             // $restrictLangCode = mysqli_real_escape_string($db, $data['restrictLangCode'] ?? '');
             $sendNum = mysqli_real_escape_string($db, $data['SendNum']);
             $createdBy = mysqli_real_escape_string($db, $loginData['user_id']);
-            $dateNow = date("Y-m-d H:i:s");
-            $sql = "INSERT INTO cmp_sms_campaign (group_id, template_id, title,timezone, schedule_at, send_status, send_num, created_by, created_date) 
-                VALUES ('$groupId', '$template_id', '$title',  '$timezone_zoneName', '$scheduleAt', 'Scheduled', '$sendNum',  '$createdBy', '$dateNow')";
+
+            $sql = "INSERT INTO cmp_sms_campaign (group_id, template_id, title,timezone, schedule_at, send_status, send_num, created_by) 
+                VALUES ('$groupId', '$template_id', '$title',  '$timezone_zoneName', '$scheduleAt', 'Scheduled', '$sendNum',  '$createdBy')";
             // print_r($sql);
             // exit;
             if (!mysqli_query($db, $sql)) {
@@ -647,9 +645,8 @@ class SMSCampaignMODEL extends APIRESPONSE
 
                 foreach ($contacts as $contact) {
                     //insert the queue for the sms camapaign queue 
-                    $dateNow = date("Y-m-d H:i:s");
                     $insertqueue = "INSERT INTO cmp_sms_messages (vendor_id,campaign_id, campaign_schedule,template_id,sender_id,mobile, template_name, message_status,created_by, created_date)
-                 VALUES ('$vendor_id','$campaign_id','1','$template_id', '" . $data['senderId'] . "','" . $contact['mobile'] . "', '" . $data['templateName'] . "', 'queued','" . $loginData['user_id'] . "', '$dateNow')";
+                 VALUES ('$vendor_id','$campaign_id','1','$template_id', '" . $data['senderId'] . "','" . $contact['mobile'] . "', '" . $data['templateName'] . "', 'queued','" . $loginData['user_id'] . "', NOW())";
                     if (!mysqli_query($db, $insertqueue)) {
                         throw new Exception("Error inserting into queue: " . mysqli_error($db));
                     }
@@ -670,7 +667,7 @@ class SMSCampaignMODEL extends APIRESPONSE
                 }
 
                 $contacts = $fetchResponse['result']['contacts'];
-                // $contacts[]['mobile'] = $testContact;
+                $contacts[]['mobile'] = $testContact;
 
                 // print_r($contacts);exit;
                 // Send WhatsApp Message
@@ -692,9 +689,9 @@ class SMSCampaignMODEL extends APIRESPONSE
                             $vartypeId = mysqli_real_escape_string($db, $var['varName']);
                             $varValueId = mysqli_real_escape_string($db, $var['varValue']['varTypeId']);
                             $varValueName = mysqli_real_escape_string($db, $var['varValue']['varTypeName']);
-                            $dateNow = date("Y-m-d H:i:s");
-                            $sqlW = "INSERT INTO cmp_sms_campaign_variable_mapping (campaign_id, template_id, type, variable_type_id, variable_value, group_id, created_by,created_date) 
-                                 VALUES ('$campaign_id', '$template_id', '$type', '$vartypeId', '$varValueId', '$groupId', '$createdBy', '$dateNow')";
+
+                            $sqlW = "INSERT INTO cmp_sms_campaign_variable_mapping (campaign_id, template_id, type, variable_type_id, variable_value, group_id, created_by) 
+                                 VALUES ('$campaign_id', '$template_id', '$type', '$vartypeId', '$varValueId', '$groupId', '$createdBy')";
 
                             if (!mysqli_query($db, $sqlW)) {
                                 throw new Exception("Error inserting variable mapping: " . mysqli_error($db));
@@ -730,56 +727,28 @@ class SMSCampaignMODEL extends APIRESPONSE
         try {
             $groupID = $data['groupDetails']['groupId'];
             $db = $this->dbConnect();
-            $vendor_id = $this->getVendorIdByUserId($loginData);
             // Fetch group details with user-provided group name
             $queryService = "SELECT 
-    gc.id AS groupId,
-    gc.group_name AS groupName,
-    gc.active_status AS activeStatus,
-    c.id AS contactId,
-    c.first_name AS firstName,
-    c.last_name AS lastName,
-    c.mobile,
-    c.email,
-    c.country,
-    c.language_code,
-    0 AS is_test_contact
-FROM cmp_group_contact_mapping AS gcm
-LEFT JOIN cmp_group_contact AS gc ON gc.id = gcm.group_id
-LEFT JOIN cmp_contact AS c ON c.id = gcm.contact_id
-WHERE gc.status = 1 
-    AND gcm.status = 1
-    AND c.status = 1
-    AND gc.active_status = 1  
-    AND gc.vendor_id = $vendor_id
-    AND gc.id = $groupID
-GROUP BY c.mobile
-
-UNION
-
-SELECT 
-    $groupID AS groupId,
-    (SELECT group_name FROM cmp_group_contact WHERE id = $groupID) AS groupName,
-    (SELECT active_status FROM cmp_group_contact WHERE id = $groupID) AS activeStatus,
-    c.id AS contactId,
-    c.first_name AS firstName,
-    c.last_name AS lastName,
-    c.mobile,
-    c.email,
-    c.country,
-    c.language_code,
-    1 AS is_test_contact
-FROM cmp_contact c
-WHERE RIGHT(c.mobile, 10) IN (
-    SELECT RIGHT(test_contact, 10) FROM cmp_vendor_sms_credentials WHERE vendor_id = $vendor_id
-)
-AND c.status = 1 AND vendor_id = $vendor_id
-AND NOT EXISTS (
-    SELECT 1 FROM cmp_group_contact_mapping gcm WHERE gcm.contact_id = c.id AND gcm.group_id = $groupID
-)
-GROUP BY c.mobile
-ORDER BY groupId DESC, contactId ASC;
-";
+            gc.id AS groupId,
+            gc.group_name AS groupName,
+            gc.active_status AS activeStatus,
+            c.id AS contactId,
+            c.first_name AS firstName,
+            c.last_name AS lastName,
+            c.mobile,
+            c.email,
+            c.country,
+            c.language_code
+        FROM cmp_group_contact_mapping AS gcm
+        LEFT JOIN cmp_group_contact AS gc ON gc.id = gcm.group_id
+        LEFT JOIN cmp_contact AS c ON c.id = gcm.contact_id
+        WHERE gc.status = 1 
+            AND gcm.status = 1
+            AND c.status = 1
+            AND gc.active_status = 1  
+            AND gc.id = $groupID 
+            AND gc.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
+        ORDER BY gc.id DESC";
             // print_r($queryService);exit;
             $result = $db->query($queryService);
             $rowCount = mysqli_num_rows($result);
