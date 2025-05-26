@@ -343,10 +343,10 @@ ORDER BY cm.id DESC
                     }
                 }
             }
-            $dateNow = date("Y-m-d H:i:s");
+
             // Insert into cmp_privilege table
-            $insertPrivilegeQuery = "INSERT INTO cmp_privilege (priv_name, description, created_by,created_date) 
-                                 VALUES ('{$data['privilegeName']}', '{$data['description']}', '{$loginData['user_id']}','$dateNow')";
+            $insertPrivilegeQuery = "INSERT INTO cmp_privilege (priv_name, description, created_by) 
+                                 VALUES ('{$data['privilegeName']}', '{$data['description']}', '{$loginData['user_id']}')";
             if (mysqli_query($db, $insertPrivilegeQuery)) {
                 $privilege_id = mysqli_insert_id($db);
 
@@ -360,7 +360,7 @@ ORDER BY cm.id DESC
 
                     $insertMappingQuery = "INSERT INTO cmp_privilege_module_permission_mapping 
                                        (priv_id, mod_id, pre_create, pre_read, pre_update, pre_delete, created_by, created_date) 
-                                       VALUES ($privilege_id, $mod_id, $pre_create, $pre_read, $pre_update, $pre_delete, {$loginData['user_id']}, '$dateNow')";
+                                       VALUES ($privilege_id, $mod_id, $pre_create, $pre_read, $pre_update, $pre_delete, {$loginData['user_id']}, NOW())";
                     mysqli_query($db, $insertMappingQuery);
                 }
 
@@ -465,10 +465,9 @@ ORDER BY cm.id DESC
                     }
                 }
             }
-             $dateNow = date("Y-m-d H:i:s");
             //  $dateNow = date("Y-m-d H:i:s");
             // Update privilege details
-            $updatePrivilegeQuery = "UPDATE cmp_privilege SET priv_name = '{$data['privilegeName']}', description = '{$data['description']}' ,updated_by ='{$loginData['user_id']}',updated_date ='{$dateNow}' WHERE id = $privilegeId AND Status=1   AND created_by = {$loginData['user_id']}";
+            $updatePrivilegeQuery = "UPDATE cmp_privilege SET priv_name = '{$data['privilegeName']}', description = '{$data['description']}' ,updated_by ='{$loginData['user_id']}',updated_date =NOW() WHERE id = $privilegeId AND Status=1   AND created_by = {$loginData['user_id']}";
             mysqli_query($db, $updatePrivilegeQuery);
 
             // Fetch existing module permissions
@@ -490,7 +489,7 @@ ORDER BY cm.id DESC
                 if (isset($existingPermissions[$mod_id])) {
                     // Update existing permissions
                     $updatePermissionQuery = "UPDATE cmp_privilege_module_permission_mapping 
-                                         SET pre_create = $pre_create, pre_read = $pre_read, pre_update = $pre_update, pre_delete = $pre_delete ,updated_by ='{$loginData['user_id']}',updated_date = '{$dateNow}'
+                                         SET pre_create = $pre_create, pre_read = $pre_read, pre_update = $pre_update, pre_delete = $pre_delete ,updated_by ='{$loginData['user_id']}',updated_date = NOW()
                                          WHERE priv_id = $privilegeId AND mod_id = $mod_id AND status = 1 AND created_by = {$loginData['user_id']}";
                     mysqli_query($db, $updatePermissionQuery);
                     unset($existingPermissions[$mod_id]);
@@ -498,7 +497,7 @@ ORDER BY cm.id DESC
                     // Insert new module permissions
                     $insertPermissionQuery = "INSERT INTO cmp_privilege_module_permission_mapping 
                                          (priv_id, mod_id, pre_create, pre_read, pre_update, pre_delete, created_by, created_date) 
-                                         VALUES ($privilegeId, $mod_id, $pre_create, $pre_read, $pre_update, $pre_delete, {$loginData['user_id']}, '$dateNow')";
+                                         VALUES ($privilegeId, $mod_id, $pre_create, $pre_read, $pre_update, $pre_delete, {$loginData['user_id']}, NOW())";
                     mysqli_query($db, $insertPermissionQuery);
                 }
             }

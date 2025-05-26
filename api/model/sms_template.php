@@ -29,7 +29,7 @@ class SMSTemplateMODEL extends APIRESPONSE
                 } elseif ($urlParam[1] === 'sender_id_dropdown') {
                     $result = $this->smsSenderIdDropdown($data, $loginData);
                     return $result;
-                } elseif ($urlParam[1] === 'storedropdown') {
+                }elseif ($urlParam[1] === 'storedropdown') {
                     // $result = $this->getStoredropdown($data, $loginData);
                     // return $result;
                     // } elseif ($urlParam[1] === 'exportstoretoexcel') {
@@ -70,7 +70,7 @@ class SMSTemplateMODEL extends APIRESPONSE
                 $urlPath = $_GET['url'];
                 $urlParam = explode('/', $urlPath);
                 if ($urlParam[1] == "update") {
-                    $result = $this->updateSmsTemplate($data, $loginData);
+                $result = $this->updateSmsTemplate($data, $loginData);
                 } else {
                     throw new Exception("Unable to proceed your request!");
                 }
@@ -181,7 +181,7 @@ class SMSTemplateMODEL extends APIRESPONSE
                 "pageIndex" => $data['pageIndex'],
                 "dataLength" => $data['dataLength'],
                 "totalRecordCount" => $recordCount,
-                'smsTemplateDataDetails' => $smsData,
+                'smsTemplateDataDetails' => $smsData, 
             );
 
             // Check if Store data exists
@@ -308,11 +308,11 @@ class SMSTemplateMODEL extends APIRESPONSE
     public function smsTemplateIdDropdown($data, $loginData)
     {
         try {
-
+ 
             $responseArray = '';
             $db = $this->dbConnect();
             $userId = $loginData['user_id'];
-
+ 
             //get the vendor id from the login data
             $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $userId";
             $result = $db->query($sql);
@@ -325,12 +325,12 @@ class SMSTemplateMODEL extends APIRESPONSE
             } else {
                 throw new Exception("Database query failed: " . $db->error);
             }
-
+ 
             $queryService = "SELECT id,template_id,template_name
             FROm cmp_sms_templates
                  WHERE status = 1 AND vendor_id = " . $vendorId . "  
                  ";
-
+ 
             //   print_r($queryService);exit;
             $result = $db->query($queryService);
             $row_cnt = mysqli_num_rows($result);
@@ -343,7 +343,7 @@ class SMSTemplateMODEL extends APIRESPONSE
                     );
                 }
             }
-
+ 
             // Check if Store data exists
             if (!empty($smsData)) {
                 $resultArray = array(
@@ -361,7 +361,7 @@ class SMSTemplateMODEL extends APIRESPONSE
                     ),
                 );
             }
-
+ 
             // Return the result array
             return $resultArray;
         } catch (Exception $e) {
@@ -373,15 +373,15 @@ class SMSTemplateMODEL extends APIRESPONSE
             );
         }
     }
-
+ 
     public function smsSenderIdDropdown($data, $loginData)
     {
         try {
-
+ 
             $responseArray = '';
             $db = $this->dbConnect();
             $userId = $loginData['user_id'];
-
+ 
             //get the vendor id from the login data
             $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $userId";
             $result = $db->query($sql);
@@ -394,12 +394,12 @@ class SMSTemplateMODEL extends APIRESPONSE
             } else {
                 throw new Exception("Database query failed: " . $db->error);
             }
-
+ 
             $queryService = "SELECT id, sender_id
             FROm cmp_vendor_sms_credentials
                  WHERE status = 1 AND vendor_id = " . $vendorId . "  
                  ";
-
+ 
             //   print_r($queryService);exit;
             $result = $db->query($queryService);
             $row_cnt = mysqli_num_rows($result);
@@ -412,7 +412,7 @@ class SMSTemplateMODEL extends APIRESPONSE
                     );
                 }
             }
-
+ 
             // Check if Store data exists
             if (!empty($smsData)) {
                 $resultArray = array(
@@ -430,7 +430,7 @@ class SMSTemplateMODEL extends APIRESPONSE
                     ),
                 );
             }
-
+ 
             // Return the result array
             return $resultArray;
         } catch (Exception $e) {
@@ -442,7 +442,7 @@ class SMSTemplateMODEL extends APIRESPONSE
             );
         }
     }
-
+ 
     /**
      * Post/Add tenant
      *
@@ -476,7 +476,7 @@ class SMSTemplateMODEL extends APIRESPONSE
             $vendor_id = $result->fetch_assoc()['vendor_id'];
             // print_r($vendor_id);exit;
 
-            //check the Sender Id from The Credentials table
+           //check the Sender Id from The Credentials table
             $checkSenderIdQuery = "SELECT sender_id FROM cmp_vendor_sms_credentials WHERE sender_id = '{$data['senderId']}' AND status = 1";
             $result = $db->query($checkSenderIdQuery);
             if ($result->num_rows == 0) {
@@ -488,13 +488,13 @@ class SMSTemplateMODEL extends APIRESPONSE
             if ($result->num_rows > 0) {
                 throw new Exception("Template ID or Template Name already exists.");
             }
-            $dateNow = date("Y-m-d H:i:s");
+ 
             // Insert into cmp_sms_template
-            $insertStoreQuery = "INSERT INTO cmp_sms_templates (vendor_id,sender_id,template_id,template_name,sms_type,language,template_content,test_mobile, created_by,created_date)
-                  VALUES ( '" . $vendor_id . "','" . $data['senderId'] . "', '" . $data['templateDetails']['templateId'] . "', '" . $data['templateDetails']['templateName'] . "', '" . $data['smsType'] . "', '" . $data['language'] . "', '" . $data['templateDetails']['templateContent'] . "', '" . $data['testMobileNo'] . "', '" . $loginData['user_id'] . "', '" . $dateNow . "')";
+            $insertStoreQuery = "INSERT INTO cmp_sms_templates (vendor_id,sender_id,template_id,template_name,sms_type,language,template_content,test_mobile, created_by)
+                  VALUES ( '".$vendor_id."','" . $data['senderId'] . "', '" . $data['templateDetails']['templateId']. "', '" . $data['templateDetails']['templateName']. "', '" . $data['smsType'] . "', '" . $data['language'] . "', '" . $data['templateDetails']['templateContent']. "', '" . $data['testMobileNo'] . "', '" . $loginData['user_id'] . "')";
             // print_r($insertStoreQuery);exit;
             if ($db->query($insertStoreQuery) === true) {
-
+            
                 $db->close();
 
                 $resultArray = array(
@@ -526,7 +526,7 @@ class SMSTemplateMODEL extends APIRESPONSE
         $resultArray = array();
         try {
             $db = $this->dbConnect();
-
+    
             // Validate input data
             $validationData = array(
                 "ID" => $data['id'],
@@ -536,12 +536,12 @@ class SMSTemplateMODEL extends APIRESPONSE
                 "Template Content" => $data['templateDetails']['templateContent'],
             );
             $this->validateInputDetails($validationData);
-
+    
             // Check if the template ID exists and is active
             $checkIdQuery = "SELECT COUNT(*) AS count FROM cmp_sms_templates WHERE id = '{$data['id']}' AND status = 1";
             $result = $db->query($checkIdQuery);
             $rowCount = $result->fetch_assoc()['count'];
-
+    
             if ($rowCount == 0) {
                 $db->close();
                 return [
@@ -551,15 +551,15 @@ class SMSTemplateMODEL extends APIRESPONSE
                     ],
                 ];
             }
-
+    
             // Check for duplicate template ID or name (excluding current ID)
             $checkDuplicateQuery = "SELECT COUNT(*) AS count FROM cmp_sms_templates 
                 WHERE (template_id = '{$data['templateDetails']['templateId']}' OR template_name = '{$data['templateDetails']['templateName']}') 
                 AND id != '{$data['id']}' AND status = 1";
-            // print_r($checkDuplicateQuery);exit;
+                // print_r($checkDuplicateQuery);exit;
             $result = $db->query($checkDuplicateQuery);
             $duplicateCount = $result->fetch_assoc()['count'];
-
+    
             if ($duplicateCount > 0) {
                 $db->close();
                 return [
@@ -569,7 +569,7 @@ class SMSTemplateMODEL extends APIRESPONSE
                     ],
                 ];
             }
-
+    
             // Check if the sender ID exists in credentials
             $checkSenderIdQuery = "SELECT sender_id FROM cmp_vendor_sms_credentials 
                 WHERE sender_id = '{$data['senderId']}' AND status = 1";
@@ -577,7 +577,7 @@ class SMSTemplateMODEL extends APIRESPONSE
             if ($result->num_rows == 0) {
                 throw new Exception("Sender ID does not exist.");
             }
-            $dateNow = date("Y-m-d H:i:s");
+    
             // Update query
             $updateQuery = "UPDATE cmp_sms_templates SET 
                 sender_id = '{$data['senderId']}',
@@ -588,15 +588,15 @@ class SMSTemplateMODEL extends APIRESPONSE
                 template_content = '{$data['templateDetails']['templateContent']}',
                 test_mobile = '{$data['testMobileNo']}',
                 updated_by = '{$loginData['user_id']}',
-                updated_date = '$dateNow'
+                updated_date = NOW()
                 WHERE id = '{$data['id']}' AND status = 1";
-
+    
             if ($db->query($updateQuery) === false) {
                 throw new Exception("Failed to update SMS Template: " . $db->error);
             }
-
+    
             $db->close();
-
+    
             $resultArray = [
                 "apiStatus" => [
                     "code" => "200",
@@ -614,10 +614,10 @@ class SMSTemplateMODEL extends APIRESPONSE
                 ],
             ];
         }
-
+    
         return $resultArray;
     }
-
+    
 
 
 
@@ -775,7 +775,7 @@ class SMSTemplateMODEL extends APIRESPONSE
     }
 
 
-
+ 
     /**
      * Validate function for tenant create
      *

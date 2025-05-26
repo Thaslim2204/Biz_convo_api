@@ -249,7 +249,7 @@ class BOTFLOWMODEL extends APIRESPONSE
             );
         }
     }
-
+    
     public function duplicateBotFlow($data, $loginData)
     {
         $resultArray = array();
@@ -275,18 +275,17 @@ class BOTFLOWMODEL extends APIRESPONSE
             // Generate new name with random number
             $randomNumber = rand(1000, 9999);
             $newName = $botData['name'] . " " . $randomNumber;
-            $dateNow = date("Y-m-d H:i:s");
+
             // Insert duplicated bot with new name
             $insertQuery = "INSERT INTO cmp_bot_trigger_type
-                (vendor_id, name, description, created_by, created_date)
+                (vendor_id, name, description, created_by)
                 VALUES
                 (
                    
                     '{$botData['vendor_id']}',
                     '" . $db->real_escape_string($newName) . "',
                     '" . $db->real_escape_string($botData['description']) . "',
-                    '$user_id',
-                    '$dateNow'
+                    '$user_id'
                 )";
 
             if ($db->query($insertQuery) === true) {
@@ -352,11 +351,11 @@ class BOTFLOWMODEL extends APIRESPONSE
             }
 
 
-            $dateNow = date("Y-m-d H:i:s");
+
             $insertStoreQuery = "INSERT INTO cmp_bot_trigger_type 
-                (vendor_id, name, description, created_by,created_date)
+                (vendor_id, name, description, created_by)
                 VALUES 
-                ('$vendor_id', '" . $data['name'] . "', '" . $data['description'] . "', '$user_id','$dateNow')";
+                ('$vendor_id', '" . $data['name'] . "', '" . $data['description'] . "', '$user_id')";
 
             if ($db->query($insertStoreQuery) === true) {
                 $db->close();
