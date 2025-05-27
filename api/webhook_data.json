@@ -1,21 +1,40 @@
 {
+    "object": "whatsapp_business_account",
     "entry": [
         {
-            "id": "667307839582149",
-            "time": 1747235363,
+            "id": "439779559212511",
             "changes": [
                 {
                     "value": {
-                        "event": "PENDING_DELETION",
-                        "message_template_id": 3597420093884557,
-                        "message_template_name": "seasonal_promos",
-                        "message_template_language": "en_US",
-                        "reason": "NONE"
+                        "messaging_product": "whatsapp",
+                        "metadata": {
+                            "display_phone_number": "917200124979",
+                            "phone_number_id": "411364465389042"
+                        },
+                        "statuses": [
+                            {
+                                "id": "wamid.HBgMOTE5OTk5ODEzNzU2FQIAERgSNDNCRkM0NDlDRjI1QzM5RjRGAA==",
+                                "status": "sent",
+                                "timestamp": "1747683613",
+                                "recipient_id": "919999813756",
+                                "conversation": {
+                                    "id": "bd89af916c7980726dba749d25b40018",
+                                    "expiration_timestamp": "1747770060",
+                                    "origin": {
+                                        "type": "marketing"
+                                    }
+                                },
+                                "pricing": {
+                                    "billable": true,
+                                    "pricing_model": "CBP",
+                                    "category": "marketing"
+                                }
+                            }
+                        ]
                     },
-                    "field": "message_template_status_update"
+                    "field": "messages"
                 }
             ]
         }
-    ],
-    "object": "whatsapp_business_account"
+    ]
 }

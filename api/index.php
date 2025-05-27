@@ -12,6 +12,7 @@ include "include/config.php";
 
 // Turn off error reporting
 error_reporting(1);
+ date_default_timezone_set("Asia/Kolkata");
 // echo"bismillah irahuman irahim";exit;
 class APIREQUESTPROCESSING
 {
