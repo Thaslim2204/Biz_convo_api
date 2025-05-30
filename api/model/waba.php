@@ -733,7 +733,8 @@ class WABAMODEL extends APIRESPONSE
             $token = $tokenData['access_token'];
 
             //Prepare webhook subscription data
-            $callbackUrl = "https://crm.bizconvo.in/be/api/webhook";
+            // $callbackUrl = "https://crm.bizconvo.in/be/api/webhook";
+            $callbackUrl = "https://871c-2406-7400-bb-bf58-98e3-3fa9-e695-3ba5.ngrok-free.app/Biz_convo/api/webhook";
             $verifyToken = "Happy";
             $fields = "account_alerts,account_update,business_status_update,message_template_components_update,message_template_status_update,message_template_quality_update,messages,phone_number_name_update,phone_number_quality_update,security";
 

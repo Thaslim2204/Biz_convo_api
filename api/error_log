@@ -98,3 +98,278 @@ Stack trace:
 #0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
 #1 {main}
   thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 15:53:10 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 15:53:10 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 15:53:10 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 15:53:11 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 15:53:11 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 15:53:11 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:07:50 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:07:50 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:07:50 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:09:47 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:09:47 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:09:47 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:09:47 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:09:47 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:09:47 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:09:54 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:09:54 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:09:54 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:10:01 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:10:01 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:10:01 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:10:31 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:10:31 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:10:31 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:10:45 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:10:45 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:10:45 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:10:45 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:10:45 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:10:45 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:10:52 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:10:52 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:10:52 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:11:00 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:11:00 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 16:11:00 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 19:42:08 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 19:42:08 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 19:42:08 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 19:49:01 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 19:49:01 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 19:49:01 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 19:49:06 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 19:49:06 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 19:49:06 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 14:22:02 UTC] PHP Warning:  Undefined array key "response" in /home/zyezo1znybqr/public_html/be/api/smscronjob.php on line 551
+[22-May-2025 14:22:03 UTC] PHP Warning:  Undefined array key "response" in /home/zyezo1znybqr/public_html/be/api/smscronjob.php on line 551
+[22-May-2025 14:22:03 UTC] PHP Warning:  Undefined array key "response" in /home/zyezo1znybqr/public_html/be/api/smscronjob.php on line 551
+[22-May-2025 14:22:03 UTC] PHP Warning:  Undefined array key "response" in /home/zyezo1znybqr/public_html/be/api/smscronjob.php on line 551
+[22-May-2025 14:22:03 UTC] PHP Warning:  Undefined array key "response" in /home/zyezo1znybqr/public_html/be/api/smscronjob.php on line 551
+[22-May-2025 20:56:50 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 20:56:50 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 20:56:50 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 20:56:50 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 20:56:50 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 20:56:50 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 21:09:57 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 21:09:57 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
+[22-May-2025 21:09:57 Asia/Kolkata] PHP Fatal error:  Uncaught Error: Failed opening required 'controller/https:.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/zyezo1znybqr/public_html/be/api/index.php:49
+Stack trace:
+#0 /home/zyezo1znybqr/public_html/be/api/index.php(56): APIREQUESTPROCESSING->apiRequestBuild()
+#1 {main}
+  thrown in /home/zyezo1znybqr/public_html/be/api/index.php on line 49
