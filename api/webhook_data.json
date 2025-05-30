@@ -13,6 +13,7 @@
                         },
                         "statuses": [
                             {
+<<<<<<< HEAD
                                 "id": "wamid.HBgMOTE5MDI1NzE0NDQ1FQIAERgSNkJENkU2QTYzNDAyMEQzOTY0AA==",
                                 "status": "sent",
                                 "timestamp": "1748513532",
@@ -29,6 +30,23 @@
                                     "pricing_model": "CBP",
                                     "category": "marketing"
                                 }
+=======
+                                "id": "wamid.HBgMOTE2Mzg0NjI2NDE4FQIAERgSQzNBNjlCOURBQTM3NTRGRDdFAA==",
+                                "status": "failed",
+                                "timestamp": "1746010397",
+                                "recipient_id": "916384626418",
+                                "errors": [
+                                    {
+                                        "code": 131049,
+                                        "title": "This message was not delivered to maintain healthy ecosystem engagement.",
+                                        "message": "This message was not delivered to maintain healthy ecosystem engagement.",
+                                        "error_data": {
+                                            "details": "In order to maintain a healthy ecosystem engagement, the message failed to be delivered."
+                                        },
+                                        "href": "https:\/\/developers.facebook.com\/docs\/whatsapp\/cloud-api\/support\/error-codes\/"
+                                    }
+                                ]
+>>>>>>> 1051881e780d83d270f6a291061936097d315a85
                             }
                         ]
                     },

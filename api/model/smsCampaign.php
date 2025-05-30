@@ -332,17 +332,15 @@ class SMSCampaignMODEL extends APIRESPONSE
                 SUM(message_status = 'queued') AS awaited
             FROM cmp_sms_messages
             WHERE vendor_id = '$vendorId'
-            
         ";
 
             if ($data['campaignId'] != "") {
                 $statusQuery .= " AND campaign_id = '" . $data['campaignId'] . "'";
             }
             if ($fromDate != "" && $toDate != "") {
-                $statusQuery .= " AND DATE(created_date) BETWEEN '$fromDate' AND '$toDate' 
-                GROUP BY DATE(created_date)
-                ORDER BY DATE(created_date) ASC";
+                $statusQuery .= " AND DATE(created_date) BETWEEN '$fromDate' AND '$toDate'";
             }
+            $statusQuery .= " GROUP BY DATE(created_date) ORDER BY DATE(created_date) ASC";
             if ($start_index && $end_index) {
                 $statusQuery .= " LIMIT $start_index, $end_index";
             }
@@ -669,7 +667,7 @@ class SMSCampaignMODEL extends APIRESPONSE
                 }
 
                 $contacts = $fetchResponse['result']['contacts'];
-                // $contacts[]['mobile'] = $testContact;
+                $contacts[]['mobile'] = $testContact;
 
                 // print_r($contacts);exit;
                 // Send WhatsApp Message
@@ -729,6 +727,7 @@ class SMSCampaignMODEL extends APIRESPONSE
         try {
             $groupID = $data['groupDetails']['groupId'];
             $db = $this->dbConnect();
+<<<<<<< HEAD
             // Fetch group details with user-provided group name
             $vendor_id = $this->getVendorIdByUserId($loginData);
             // Fetch group details with user-provided group name
@@ -779,6 +778,30 @@ class SMSCampaignMODEL extends APIRESPONSE
                         )
                         GROUP BY c.mobile
                         ORDER BY groupId DESC, contactId ASC";
+=======
+            // Fetch group details with user-provided group name
+            $queryService = "SELECT 
+            gc.id AS groupId,
+            gc.group_name AS groupName,
+            gc.active_status AS activeStatus,
+            c.id AS contactId,
+            c.first_name AS firstName,
+            c.last_name AS lastName,
+            c.mobile,
+            c.email,
+            c.country,
+            c.language_code
+        FROM cmp_group_contact_mapping AS gcm
+        LEFT JOIN cmp_group_contact AS gc ON gc.id = gcm.group_id
+        LEFT JOIN cmp_contact AS c ON c.id = gcm.contact_id
+        WHERE gc.status = 1 
+            AND gcm.status = 1
+            AND c.status = 1
+            AND gc.active_status = 1  
+            AND gc.id = $groupID 
+            AND gc.vendor_id = " . $this->getVendorIdByUserId($loginData) . "
+        ORDER BY gc.id DESC";
+>>>>>>> 1051881e780d83d270f6a291061936097d315a85
             // print_r($queryService);exit;
             $result = $db->query($queryService);
             $rowCount = mysqli_num_rows($result);

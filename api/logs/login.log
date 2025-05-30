@@ -325,6 +325,7 @@
 	Thu, 15 May 2025 14:37:11 +0530	C:\xampp10.2.01\htdocs\Biz_convo\api		Please give the Token
 	Thu, 15 May 2025 14:37:14 +0530	C:\xampp10.2.01\htdocs\Biz_convo\api		Please give the Token
 	Thu, 15 May 2025 14:37:14 +0530	C:\xampp10.2.01\htdocs\Biz_convo\api		Please give the Token
+<<<<<<< HEAD
 	Thu, 15 May 2025 13:43:32 +0000	/home/zyezo1znybqr/public_html/be/api	1	logout from the application USER ID: 
 	Thu, 15 May 2025 13:43:45 +0000	/home/zyezo1znybqr/public_html/be/api		logged into the application
 	Thu, 15 May 2025 20:20:21 +0530	/home/zyezo1znybqr/public_html/be/api		Vendor ID not found for user ID: 1
@@ -594,3 +595,11 @@
 	Thu, 29 May 2025 17:27:44 +0530	C:\xampp10.2.01\htdocs\Biz_convo\api		Please give the Token
 	Thu, 29 May 2025 17:27:44 +0530	C:\xampp10.2.01\htdocs\Biz_convo\api		Please give the Token
 	Thu, 29 May 2025 17:27:44 +0530	C:\xampp10.2.01\htdocs\Biz_convo\api		Please give the Token
+=======
+	Fri, 16 May 2025 20:09:53 +0530	C:\xampp\htdocs\Biz_convo\api		Unauthorized Login
+	Fri, 16 May 2025 20:10:11 +0530	C:\xampp\htdocs\Biz_convo\api		Unauthorized Login
+	Fri, 16 May 2025 20:10:14 +0530	C:\xampp\htdocs\Biz_convo\api		Unauthorized Login
+	Mon, 19 May 2025 11:21:10 +0530	C:\xampp\htdocs\Biz_convo\api		Unauthorized Login
+	Fri, 23 May 2025 21:05:53 +0530	C:\xampp\htdocs\Biz_convo\api		Unauthorized Login
+	Fri, 23 May 2025 21:07:17 +0530	C:\xampp\htdocs\Biz_convo\api		Unauthorized Login
+>>>>>>> 1051881e780d83d270f6a291061936097d315a85

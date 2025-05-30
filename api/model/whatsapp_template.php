@@ -31,6 +31,9 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                 } else if ($urlParam[1] == "list") {
                     $result = $this->templateList($data, $loginData);
                     return $result;
+                } else if ($urlParam[1] == "sync") {
+                    $result = $this->templateSync($data, $loginData);
+                    return $result;
                 } else if ($urlParam[1] == "sendMessage") {
                     $result = $this->sendMessage($data, $loginData, "", "");
                 } else if ($urlParam[1] == "uploadMedia") {
@@ -298,7 +301,8 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             ));
 
             $response = curl_exec($curl);
-            // echo $response;exit;
+            // echo $response;
+            // exit;
             $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
 
             $responseData = json_decode($response, true);
@@ -341,16 +345,14 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                 $status = $template['status'] ?? null;
                 $headerHandles = $template['components'][0]['example']['header_handle'] ?? [];
                 // print_r(json_encode($headerHandles[0]['example']['header_handle']));
+                $imgUrl = '';
+
                 if (!empty($headerHandles[0])) {
                     $mediaUrl = $headerHandles[0];
 
                     // Upload the image and get media ID
-                    // $uploadResult = $this->uploadImageFromTemplateHandle($mediaUrl, $loginData);
-
-                    // if ($uploadResult['status']) {
-                    //     $template['local_path'] = $uploadResult['local_path'];
-                    $imgUrl = $template['local_path'] ? $template['local_path'] : null;
-                    // }
+                    // $uploadResult = $this->uploadImageFromTemplateHandle($mediaUrl, $template_id);
+                    $imgUrl = $uploadResult['local_path'] ?? null;
                 }
 
                 $templatedData = json_encode($template);
@@ -373,8 +375,13 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
                     // Not exists: insert new record
                     $created_date = date('Y-m-d H:i:s');
                     $insertSql = "INSERT INTO cmp_whatsapp_templates
+<<<<<<< HEAD
                         (uid, vendor_id, template_id, media_url, template_name, category, language, body_data,  template_status, created_by)
                         VALUES ('$uid','$vendor_id','$template_id','" . $imgUrl . "','$templateName' ,'$templateCategory','$templatelanguage','" . mysqli_real_escape_string($db, $templatedData) . "', '$status', '" . $loginData['user_id'] . "')";
+=======
+                        (uid, vendor_id, template_id, media_url, template_name, category, language, body_data,  template_status, created_by, created_date)
+                        VALUES ('$uid','$vendor_id','$template_id','" . $imgUrl . "','$templateName' ,'$templateCategory','$templatelanguage','" . mysqli_real_escape_string($db, $templatedData) . "', '$status', '" . $loginData['user_id'] . "', NOW())";
+>>>>>>> 1051881e780d83d270f6a291061936097d315a85
                     // print_r($insertSql);exit;
                     $db->query($insertSql);
 
@@ -389,7 +396,7 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             $countResult = $db->query($totalCount);
             $row_cnt = mysqli_num_rows($countResult);
             $query = "SELECT * FROM cmp_whatsapp_templates WHERE status = 1 AND vendor_id = '" . $vendor_id . "'
-                ORDER BY id DESC
+                ORDER BY updated_date DESC
                  LIMIT $start_index, $end_index";
 
             $result = $db->query($query);
@@ -450,6 +457,184 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
         }
     }
 
+    protected function templateSync($data, $loginData)
+    {
+        try {
+
+            $this->fbCredentials($loginData);
+
+            $url = $this->facebook_base_url . '/' . $this->facebook_base_version . '/' . $this->whatsapp_business_id . '/' . "message_templates";
+            if ($data['limit']) {
+                $url .= "?limit=" . $data['limit'] . "";
+            }
+            if ($data['before']) {
+                $url .= "&before=" . $data['before'] . "";
+            }
+            if ($data['after']) {
+                $url .= "&after=" . $data['after'] . "";
+            }
+            //fetch templates from meta
+            $curl = curl_init();
+
+            curl_setopt_array($curl, array(
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_ENCODING => '',
+                CURLOPT_MAXREDIRS => 10,
+                CURLOPT_TIMEOUT => 0,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                CURLOPT_CUSTOMREQUEST => 'GET',
+                CURLOPT_HTTPHEADER => array(
+                    'Authorization: Bearer ' . $this->fb_auth_token . ''
+                ),
+            ));
+
+            $response = curl_exec($curl);
+            // echo $response;
+            // exit;
+            $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+            $responseData = json_decode($response, true);
+            $template_id = isset($responseData['id']) ? $responseData['id'] : null;
+            $templates = $responseData["data"] ?? [];
+            $paging = $responseData["paging"] ?? [];
+            curl_close($curl);
+
+            $db = $this->dbConnect();
+            //Get the Store id from the login data
+            $user_id = $loginData['user_id'];
+            $sql = "SELECT vendor_id FROM cmp_vendor_user_mapping WHERE user_id = $user_id";
+            $result = $db->query($sql);
+            $vendor_id = $result->fetch_assoc()['vendor_id'];
+            // print_r($vendor_id);exit;
+
+            $sql = "SELECT id, template_id, created_date, updated_date, media_url FROM cmp_whatsapp_templates WHERE status = 1 AND vendor_id = '" . $vendor_id . "' ";
+            // print_r($sql);exit;
+            $result = $db->query($sql);
+
+            // print_r($totalCount);exit;
+
+            $dbTemplateDates = [];
+            while ($row = $result->fetch_assoc()) {
+                $dbTemplateDates[$row['template_id']] = [
+                    "created_date" => $row['created_date'],
+                    "updated_date" => $row['updated_date'],
+                    "media_url" => $row['media_url']
+                ];
+            }
+
+            // Merge created_date & updated_date and update/insert into DB
+            foreach ($templates as $template) {
+                $template_id = $template['id'] ?? null;
+                $templateName = $template['name'] ?? null;
+                $templateCategory = $template['category'] ?? null;
+                $templatelanguage = $template['language'] ?? null;
+                $status = $template['status'] ?? null;
+                $headerHandles = $template['components'][0]['example']['header_handle'] ?? [];
+                // print_r(json_encode($headerHandles[0]['example']['header_handle']));
+                $imgUrl = '';
+
+                if (!empty($headerHandles[0])) {
+                    $mediaUrl = $headerHandles[0];
+
+                    // Upload the image and get media ID
+                    $uploadResult = $this->uploadImageFromTemplateHandle($mediaUrl, $template_id);
+                    $imgUrl = $uploadResult['local_path'] ?? null;
+                }
+
+                $templatedData = json_encode($template);
+                // Generate unique user ID
+                $uid = bin2hex(random_bytes(8));
+
+                if ($template_id && isset($dbTemplateDates[$template_id])) {
+                    // echo "comes here---";
+                    $updateSql = "UPDATE cmp_whatsapp_templates SET 
+                                    media_url = '" . $imgUrl . "',
+                                    language = '$templatelanguage',
+                                    body_data = '" . mysqli_real_escape_string($db, $templatedData) . "',
+                                    template_status = '$status', 
+                                    updated_by = '" . $loginData['user_id'] . "', 
+                                    updated_date = NOW()
+                                    WHERE
+                                   template_id = '$template_id' and status = 1";
+                } else if ($template_id) {
+                    // Not exists: insert new record
+                    $created_date = date('Y-m-d H:i:s');
+                    $updateSql = "INSERT INTO cmp_whatsapp_templates
+                        (uid, vendor_id, template_id, media_url, template_name, category, language, body_data,  template_status, created_by, created_date)
+                        VALUES ('$uid','$vendor_id','$template_id','" . $imgUrl . "','$templateName' ,'$templateCategory','$templatelanguage','" . mysqli_real_escape_string($db, $templatedData) . "', '$status', '" . $loginData['user_id'] . "', NOW())";
+                    // print_r($insertSql);exit;
+
+                }
+
+                if ($db->query($updateSql)) {
+                    $responseArray = array(
+                        'TemplateData' => array_values($templates),
+                    );
+                    if (!empty($templates)) {
+                        $resultArray = array(
+                            "apiStatus" => array(
+                                "code" => "200",
+                                "message" => "Template sync successfull",
+                            ),
+                            "result" => $responseArray,
+                        );
+                    } else {
+                        $resultArray = array(
+                            "apiStatus" => array(
+                                "code" => "404",
+                                "message" => "No data found...",
+                            ),
+                        );
+                    }
+                } else {
+                    throw new Exception("Unable to sync templates");
+                }
+            }
+            $db->commit();
+            return $resultArray;
+        } catch (Exception $e) {
+            return array(
+                "apiStatus" => array(
+                    "code" => "401",
+                    "message" => $e->getMessage(),
+                ),
+            );
+        }
+    }
+
+    function uploadImageFromTemplateHandle($imageUrl, $templateId)
+    {
+        $uploadPath = "uploads/whatsapp_template_files/";
+
+        // Ensure folder exists
+        if (!is_dir($uploadPath)) {
+            mkdir($uploadPath, 0777, true);
+        }
+
+        // Get extension from URL
+        $originalName = basename(parse_url($imageUrl, PHP_URL_PATH));
+        $ext = pathinfo($originalName, PATHINFO_EXTENSION);
+
+        // File name = template_id.extension
+        $filename = $templateId . '.' . $ext;
+        $savePath = $uploadPath . $filename;
+
+        // Download image
+        $imageData = @file_get_contents($imageUrl);
+        if ($imageData === false) {
+            return ['status' => false, 'message' => 'Image fetch failed'];
+        }
+
+        // Overwrite existing file
+        file_put_contents($savePath, $imageData);
+
+        return [
+            'status' => true,
+            'local_path' => $savePath,
+        ];
+    }
+
 
     public function templateByID($data, $loginData)
     {
@@ -489,14 +674,22 @@ class WHATSAPPTEMPLATEMODEL extends APIRESPONSE
             // echo $response;exit;
 
             $db = $this->dbConnect();
-            $sql = "SELECT id, template_id, media_id, created_date, updated_date from cmp_whatsapp_templates where status = 1 and template_id = '" . $template_id . "'";
+            $sql = "SELECT id, template_id, media_id, media_url, created_date, updated_date from cmp_whatsapp_templates where status = 1 and template_id = '" . $template_id . "'";
             $result = $db->query($sql);
             $dbData = $result->fetch_assoc();
             // print_r($sql);exit;
+
+            //make URL with domain
+            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
+            $host = $_SERVER['HTTP_HOST'];
+            $scriptDir = dirname($_SERVER['SCRIPT_NAME']);
+            $relativePath = ltrim($dbData['media_url'] ?? null, '/');
+            $fullUrl = $protocol . $host . $scriptDir . '/' . $relativePath;
+
             $responseData['created_date'] = $dbData['created_date'] ?? null;
             $responseData['updated_date'] = $dbData['updated_date'] ?? null;
             $responseData['media_id'] = $dbData['media_id'] ?? null;
-            $responseData['media_id'] = $dbData['media_id'] ?? null;
+            $responseData['media_url'] = $fullUrl;
             $responseData['display_phone_no'] = $this->display_phone_no ?? null;
 
             if ($httpCode == "200") {
@@ -1033,7 +1226,7 @@ ORDER BY groupId DESC, contactId ASC;
             $responseArray = [];
 
             foreach ($contacts as $contact) {
-                $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'], $template['media_id'], $iscampaign, $campaign_id);
+                $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'], $template['media_id'], $template['media_url'], $iscampaign, $campaign_id);
 
                 $body = [
                     'messaging_product' => 'whatsapp',
@@ -1136,13 +1329,12 @@ ORDER BY groupId DESC, contactId ASC;
             }
 
 
-
             $contacts = $fetchResponse['result']['contacts'];
             $template = $fetchResponse['result']['template'];
             // $contacts[]['mobile'] = $testContact;
 
             foreach ($contacts as $contact) {
-                $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'], $template['media_id'], $iscampaign, $campaign_id);
+                $dynamicComponents = $this->prepareDynamicComponents($template['components'], $contact, $data['variableIds'], $template['media_id'], $template['media_url'], $iscampaign, $campaign_id);
 
                 $body = [
                     'messaging_product' => 'whatsapp',
@@ -1188,7 +1380,7 @@ ORDER BY groupId DESC, contactId ASC;
     /**
      * Prepare dynamic components based on the template and contact data
      */
-    private function prepareDynamicComponents($templateComponents, $contact, $variableIds, $mediaId, $iscampaign, $campaign_id)
+    private function prepareDynamicComponents($templateComponents, $contact, $variableIds, $mediaId, $media_url, $iscampaign, $campaign_id)
     {
         // print_r((json_encode($mediaId)));
         // exit;
@@ -1215,7 +1407,7 @@ ORDER BY groupId DESC, contactId ASC;
                     } else if ($component['format'] != 'TEXT') {
                         // echo "csdkf";exit;
 
-                        $dynamicComponents[] = $this->prepareHeaderMediaComponent($component, $contact, $mediaId, $iscampaign, $campaign_id);
+                        $dynamicComponents[] = $this->prepareHeaderMediaComponent($component, $contact, $mediaId, $media_url, $iscampaign, $campaign_id);
                     }
                     break;
 
@@ -1285,11 +1477,11 @@ ORDER BY groupId DESC, contactId ASC;
     }
 
 
-    private function prepareHeaderMediaComponent($component, $contact, $mediaId, $iscampaign, $campaign_id)
+    private function prepareHeaderMediaComponent($component, $contact, $mediaId, $media_url, $iscampaign, $campaign_id)
     {
         $db = $this->dbConnect();
         if ($iscampaign === "campaign") {
-            $sql = "SELECT media_id,media_url FROM cmp_campaign WHERE id='" . $campaign_id . "' AND status=1";
+            $sql = "SELECT media_id, media_url FROM cmp_campaign WHERE id='" . $campaign_id . "' AND status=1";
             $result = $db->query($sql);
             $row = $result->fetch_assoc();
             $dbmediaId = $row['media_id'];
@@ -1297,17 +1489,25 @@ ORDER BY groupId DESC, contactId ASC;
         // print_r($dbmediaId);
         // Assuming the header media is an image (you can extend this for other media types like video)
         if (isset($component['format'])) {
+            $mediaFormat = strtolower($component['format']);
+            $parameter = [
+                'type' => $component['format'],
+            ];
+
+            // Prefer media ID if available, else fallback to media URL
+            if (!empty($dbmediaId) || !empty($mediaId)) {
+                $parameter[$mediaFormat]['id'] = $dbmediaId ?: $mediaId;
+            } elseif (!empty($media_url)) {
+                $parameter[$mediaFormat]['link'] =  $media_url;
+            } else {
+                // Return nothing if neither is present
+                return null;
+            }
+
             return [
                 'type' => 'HEADER',
                 'parameters' => [
-                    [
-                        'type' => $component['format'],
-                        strtolower($component['format']) => [
-                            // 'link' => $component['example']['header_handle'][0]
-                            "id" => $dbmediaId ? $dbmediaId : $mediaId
-                            // "id" => $mediaId
-                        ]
-                    ]
+                    $parameter
                 ]
             ];
         }
